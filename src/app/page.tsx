@@ -28,6 +28,7 @@ const SOUND_FRIEND_MESSAGE_RECEIVED = "/sounds/friend_message_received.mp3";
 const SOUND_FRIEND_TYPING = "/sounds/friend_typing.mp3";
 const SOUND_MY_AUDIO_RECORD_START = "/sounds/my_audio_record_start.mp3";
 const SOUND_MY_AUDIO_SENT = "/sounds/my_audio_sent.mp3";
+const SOUND_MY_TYPING = "/sounds/my_typing.mp3";
 
 
 export default function ChatterSimPage() {
@@ -129,6 +130,7 @@ export default function ChatterSimPage() {
 
         if (item.type === "text") {
           setShowSendButton(false);
+          playSound(SOUND_MY_TYPING); 
           for (let i = 0; i < item.content.length; i++) {
             setCurrentTypingText(item.content.substring(0, i + 1));
             await delay(TYPING_SPEED_MS);
@@ -149,20 +151,20 @@ export default function ChatterSimPage() {
         } else if (item.type === "audio") {
           playSound(SOUND_MY_AUDIO_RECORD_START);
           setIsRecordingAudio(true);
-          setCurrentTypingText(""); // Clear any "Sending..." text
-          setShowSendButton(false); // Hide send button during recording sim
+          setCurrentTypingText(""); 
+          setShowSendButton(false); 
 
-          if (item.content) { // If there's an audio file to play for simulation
+          if (item.content) { 
             const audio = new Audio(item.content);
             const playbackPromise = new Promise<void>((resolve, reject) => {
               audio.oncanplaythrough = () => audio.play().catch(err => {
                 console.error("Error playing recording sim audio:", err);
-                resolve(); // Resolve anyway to not block simulation
+                resolve(); 
               });
               audio.onended = resolve;
               audio.onerror = (e) => {
                 console.error("Error during recording sim audio playback:", e);
-                resolve(); // Resolve anyway
+                resolve(); 
               };
               audio.load();
             });
@@ -172,7 +174,7 @@ export default function ChatterSimPage() {
                 console.error("Failed to play audio during 'me' sending simulation, falling back to duration:", error);
                 await delay(item.audioDuration || 2000);
             }
-          } else { // Fallback to duration if no content for playback
+          } else { 
             await delay(item.audioDuration || 2000);
           }
 
@@ -180,7 +182,7 @@ export default function ChatterSimPage() {
           sentMessageId = addMessage({
             sender: "me",
             type: "audio",
-            content: item.content, // This could be a real URL or a placeholder if no actual recording happens
+            content: item.content, 
             audioDuration: item.audioDuration,
             ticks: "sent"
           });
