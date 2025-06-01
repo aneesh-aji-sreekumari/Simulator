@@ -2,7 +2,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Maximize, Minimize, PlayCircle, StopCircle, RefreshCw } from "lucide-react";
+import { Maximize, Minimize, PlayCircle, StopCircle, RefreshCw, Moon, Sun } from "lucide-react";
 
 interface AppHeaderProps {
   isFullScreenChat: boolean;
@@ -12,6 +12,8 @@ interface AppHeaderProps {
   onResetSimulation: () => void;
   isSimulating: boolean;
   canSimulate: boolean; // True if queue has items
+  currentTheme: string;
+  onToggleTheme: () => void;
 }
 
 export default function AppHeader({
@@ -22,6 +24,8 @@ export default function AppHeader({
   onResetSimulation,
   isSimulating,
   canSimulate,
+  currentTheme,
+  onToggleTheme,
 }: AppHeaderProps) {
   return (
     <header className="bg-primary text-primary-foreground p-3 shadow-md flex items-center justify-between sticky top-0 z-40">
@@ -54,7 +58,7 @@ export default function AppHeader({
           onClick={onResetSimulation}
           variant="ghost"
           size="iconSm"
-          disabled={!isSimulating && !canSimulate} // Corrected: Disable if not simulating AND queue is empty
+          disabled={isSimulating && !canSimulate}
           aria-label="Reset chat simulation"
           className="hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-primary-foreground/50"
           title="Reset Simulation"
@@ -62,7 +66,18 @@ export default function AppHeader({
           <RefreshCw className="h-5 w-5" />
         </Button>
 
-        <span className="w-px h-6 bg-primary-foreground/30 mx-1"></span> 
+        <span className="w-px h-6 bg-primary-foreground/30 mx-1"></span>
+
+        <Button
+          onClick={onToggleTheme}
+          variant="ghost"
+          size="iconSm"
+          aria-label={currentTheme === 'light' ? "Switch to Dark Mode" : "Switch to Light Mode"}
+          className="hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-primary-foreground/50"
+          title={currentTheme === 'light' ? "Switch to Dark Mode" : "Switch to Light Mode"}
+        >
+          {currentTheme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+        </Button>
 
         <Button
           onClick={onToggleFullScreen}

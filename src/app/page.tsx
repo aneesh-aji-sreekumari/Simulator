@@ -70,6 +70,31 @@ export default function ChatterSimPage() {
   const videoCompletionPromises = useRef<Record<string, () => void>>({});
 
   const [isFullScreenChat, setIsFullScreenChat] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    const storedTheme = localStorage.getItem('theme');
+    // Default to 'light' if no theme is stored or if the stored value is not 'dark'
+    const initialTheme = storedTheme === 'dark' ? 'dark' : 'light';
+    setCurrentTheme(initialTheme);
+  }, []);
+
+  useEffect(() => {
+    if (currentTheme === undefined) {
+      return; // Wait for initialization
+    }
+    if (currentTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [currentTheme]);
+
+  const handleThemeToggle = () => {
+    setCurrentTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  };
 
 
   const toggleFullScreenChat = useCallback(() => {
@@ -108,7 +133,7 @@ export default function ChatterSimPage() {
 
   const handleVideoPlaybackEnd = useCallback((messageId: string) => {
     setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, isVideoPlaying: false } : msg));
-    const videoMessageId = messageId; 
+    const videoMessageId = messageId;
     videoCompletionPromises.current[videoMessageId]?.();
     delete videoCompletionPromises.current[videoMessageId];
   }, []);
@@ -152,7 +177,7 @@ export default function ChatterSimPage() {
       reader.onloadend = () => {
         setChatWallpaperUrl(reader.result as string);
         setIsChatWallpaperUploaded(true);
-        setChatWallpaperUrlInput(""); 
+        setChatWallpaperUrlInput("");
       };
       reader.readAsDataURL(file);
     }
@@ -192,14 +217,14 @@ export default function ChatterSimPage() {
         const item = queue[i];
 
         if (item.sender === "me") {
-          await stoppableDelay(300, signal); 
+          await stoppableDelay(300, signal);
           if (signal.aborted) return;
 
           let sentMessageId: string | undefined;
 
           if (item.type === "text") {
             setShowSendButton(false);
-            
+
             const typingLoopSound = new Audio(SOUND_MY_TYPING);
             typingLoopSound.loop = true;
             let typingSoundActuallyPlayed = false;
@@ -219,7 +244,7 @@ export default function ChatterSimPage() {
                 typingLoopSound.pause();
               }
             }
-            
+
             if (signal.aborted) return;
 
             setShowSendButton(true);
@@ -239,10 +264,10 @@ export default function ChatterSimPage() {
           } else if (item.type === "audio") {
             playSound(SOUND_MY_AUDIO_RECORD_START);
             setIsRecordingAudio(true);
-            setCurrentTypingText(""); 
+            setCurrentTypingText("");
             setShowSendButton(false);
 
-            if (item.content) { 
+            if (item.content) {
               const audio = new Audio(item.content);
               const playbackPromise = new Promise<void>((resolvePlayback, rejectPlayback) => {
                 if (signal.aborted) return rejectPlayback(new DOMException("Aborted", "AbortError"));
@@ -307,14 +332,12 @@ export default function ChatterSimPage() {
             if (signal.aborted) return;
             updateMessageTicks(sentMessageId, "delivered");
           }
-          
-          // Keypad remains, but content might clear for next turn if needed (handled by individual message type logic)
 
         } else { // Friend's message
           setCurrentTypingText("");
           setShowSendButton(false);
           setIsRecordingAudio(false);
-          
+
           setShowFriendTypingIndicator(true);
           playSound(SOUND_FRIEND_TYPING);
           await stoppableDelay(FRIEND_TYPING_INDICATOR_DURATION_MS, signal);
@@ -462,6 +485,8 @@ export default function ChatterSimPage() {
         onResetSimulation={handleResetSimulation}
         isSimulating={isSimulating}
         canSimulate={customMessageQueue.length > 0}
+        currentTheme={currentTheme || 'light'}
+        onToggleTheme={handleThemeToggle}
       />
 
       <main className={`flex-grow flex p-4 gap-4 ${isFullScreenChat ? 'justify-center items-start' : 'flex-col md:flex-row'}`}>
@@ -599,6 +624,3 @@ export default function ChatterSimPage() {
     </div>
   );
 }
-    
-
-    
