@@ -9,29 +9,11 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
 import { Button } from "@/components/ui/button";
-import { PlayCircle, UserCircle, FileUp, XCircle, MoreVertical, Edit2, Trash2, FileSpreadsheet, Maximize, Minimize } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { PlayCircle, UserCircle, FileUp, XCircle, MoreVertical, Edit2, Trash2, FileSpreadsheet, Maximize, Minimize, Settings } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogClose,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-
-import { ScrollArea } from "@/components/ui/scroll-area";
-import * as XLSX from 'xlsx';
-import { useToast } from "@/hooks/use-toast";
-import { PlusCircle } from "lucide-react";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
 
 const TYPING_SPEED_MS = 80;
@@ -299,19 +281,65 @@ export default function ChatterSimPage() {
     setShowKeypadInputArea(false);
   };
 
+  if (isFullScreenChat) {
+    return (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-200 dark:bg-slate-900 p-2 sm:p-4">
+        <div className="absolute top-2 right-2 z-10">
+          <Button
+            onClick={toggleFullScreenChat}
+            variant="outline"
+            size="icon"
+            aria-label="Exit full screen"
+          >
+            <Minimize className="h-5 w-5" />
+          </Button>
+        </div>
+        <div className="bg-background flex flex-col shadow-2xl overflow-hidden w-full h-full max-w-lg md:max-w-xl rounded-lg border-2 border-slate-700 dark:border-slate-600">
+          <ChatHeader
+            name={friendName}
+            avatarUrl={friendAvatarUrl || undefined}
+            isOnline={isSimulating || showFriendTypingIndicator}
+          />
+          <ChatWindow
+            messages={messages}
+            showTypingIndicator={showFriendTypingIndicator}
+            onAudioPlaybackEnd={handleAudioPlaybackEnd}
+            onVideoPlaybackEnd={handleVideoPlaybackEnd}
+            friendAvatarUrl={friendAvatarUrl}
+          />
+          {(showKeypadInputArea || isRecordingAudio) && (
+            <KeypadArea
+              isSimulating={isSimulating && (currentTypingText !== "" || isRecordingAudio)}
+              isRecordingAudio={isRecordingAudio}
+              typedText={currentTypingText}
+              showSendButton={showSendButton}
+            />
+          )}
+          <div className="border-t bg-background dark:bg-primary/10 p-3">
+            <Button
+              onClick={() => simulateChat(customMessageQueue)}
+              disabled={isSimulating || customMessageQueue.length === 0}
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+              size="default"
+              aria-label="Start chat simulation"
+            >
+              <PlayCircle className="h-5 w-5 mr-2" />
+              {isSimulating ? "Simulating..." : "Simulate Chat"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex min-h-screen bg-slate-200 dark:bg-slate-900 
-      ${isFullScreenChat 
-        ? 'p-0 md:p-1 justify-center items-center' 
-        : 'p-4 flex-col md:flex-row gap-4'
-      }`}
-    >
-      <div className={`
-        ${isFullScreenChat ? 'hidden' : 'md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-2rem)] flex flex-col gap-4'}
-      `}>
+    <div className="flex min-h-screen bg-slate-200 dark:bg-slate-900 p-4 flex-col md:flex-row gap-4">
+      {/* Left Panel: Customization & Composer */}
+      <div className="md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-2rem)] flex flex-col gap-4">
         <Card>
           <CardHeader>
             <CardTitle>Customize Friend</CardTitle>
+            <CardDescription>Set name and avatar for your chat partner.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -370,51 +398,54 @@ export default function ChatterSimPage() {
         <MessageComposer queue={customMessageQueue} setQueue={setCustomMessageQueue} />
       </div>
 
-      <div className={`flex flex-col 
-        ${isFullScreenChat 
-          ? 'w-full h-full max-w-none max-h-none md:max-w-3xl md:max-h-[95vh]' 
-          : 'items-center justify-center flex-grow md:w-2/3 lg:w-3/4'}
-      `}>
-        <div className={`bg-background flex flex-col shadow-2xl overflow-hidden
-          ${isFullScreenChat 
-            ? 'w-full h-full rounded-none border-none md:rounded-xl md:border-2 border-slate-700 dark:border-slate-600'
-            : 'w-full max-w-sm h-[calc(100vh-2rem-env(safe-area-inset-bottom))] sm:h-[calc(100vh-4rem-env(safe-area-inset-bottom))] max-h-[800px] rounded-xl border-4 border-slate-700 dark:border-slate-600'
-          }
-        `}>
-          <ChatHeader 
-            name={friendName} 
-            avatarUrl={friendAvatarUrl || undefined} 
-            isOnline={isSimulating || showFriendTypingIndicator}
-            isFullScreen={isFullScreenChat}
-            onToggleFullScreen={toggleFullScreenChat}
-          />
-          <ChatWindow
-            messages={messages}
-            showTypingIndicator={showFriendTypingIndicator}
-            onAudioPlaybackEnd={handleAudioPlaybackEnd}
-            onVideoPlaybackEnd={handleVideoPlaybackEnd}
-            friendAvatarUrl={friendAvatarUrl}
-          />
-          {(showKeypadInputArea || isRecordingAudio) && (
-            <KeypadArea
-              isSimulating={isSimulating && (currentTypingText !== "" || isRecordingAudio)}
-              isRecordingAudio={isRecordingAudio}
-              typedText={currentTypingText}
-              showSendButton={showSendButton}
-            />
-          )}
-          <div className={`border-t bg-background dark:bg-primary/10 ${isFullScreenChat ? 'p-2' : 'p-4'}`}>
-            <Button
-              onClick={() => simulateChat(customMessageQueue)}
-              disabled={isSimulating || customMessageQueue.length === 0}
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-              size={isFullScreenChat ? 'sm' : 'default'}
-              aria-label="Start chat simulation"
-            >
-              <PlayCircle className={`mr-2 ${isFullScreenChat ? 'h-4 w-4' : 'h-5 w-5'}`} />
-              {isSimulating ? "Simulating..." : (isFullScreenChat ? "Simulate" : "Simulate Chat")}
-            </Button>
-          </div>
+      {/* Right Panel: Chat Simulation */}
+      <div className="flex flex-col items-center justify-start flex-grow md:w-2/3 lg:w-3/4 pt-0 md:pt-0"> {/* Adjusted pt for alignment */}
+        <div className="w-full max-w-sm relative">
+            <div className="absolute top-2 right-2 z-10"> {/* Positioned within the max-w-sm container */}
+                 <Button
+                    onClick={toggleFullScreenChat}
+                    variant="ghost" // Changed to ghost for less intrusion
+                    size="icon"
+                    aria-label="Enter full screen"
+                    className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                 >
+                    <Maximize className="h-5 w-5" />
+                 </Button>
+            </div>
+            <div className="bg-background flex flex-col shadow-2xl overflow-hidden h-[calc(100vh-2rem-env(safe-area-inset-bottom)-64px)] sm:h-[calc(100vh-4rem-env(safe-area-inset-bottom)-64px)] max-h-[750px] rounded-xl border-4 border-slate-700 dark:border-slate-600 mt-8 md:mt-0"> {/* Added mt for button space */}
+              <ChatHeader
+                name={friendName}
+                avatarUrl={friendAvatarUrl || undefined}
+                isOnline={isSimulating || showFriendTypingIndicator}
+              />
+              <ChatWindow
+                messages={messages}
+                showTypingIndicator={showFriendTypingIndicator}
+                onAudioPlaybackEnd={handleAudioPlaybackEnd}
+                onVideoPlaybackEnd={handleVideoPlaybackEnd}
+                friendAvatarUrl={friendAvatarUrl}
+              />
+              {(showKeypadInputArea || isRecordingAudio) && (
+                <KeypadArea
+                  isSimulating={isSimulating && (currentTypingText !== "" || isRecordingAudio)}
+                  isRecordingAudio={isRecordingAudio}
+                  typedText={currentTypingText}
+                  showSendButton={showSendButton}
+                />
+              )}
+              <div className="border-t bg-background dark:bg-primary/10 p-4">
+                <Button
+                  onClick={() => simulateChat(customMessageQueue)}
+                  disabled={isSimulating || customMessageQueue.length === 0}
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                  size="default"
+                  aria-label="Start chat simulation"
+                >
+                  <PlayCircle className="mr-2 h-5 w-5" />
+                  {isSimulating ? "Simulating..." : "Simulate Chat"}
+                </Button>
+              </div>
+            </div>
         </div>
       </div>
     </div>
