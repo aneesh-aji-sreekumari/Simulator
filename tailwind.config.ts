@@ -65,8 +65,6 @@ export default {
           border: 'hsl(var(--sidebar-border))',
           ring: 'hsl(var(--sidebar-ring))',
         },
-        'whatsapp-green': '#4CAF50', // Added WhatsApp green
-        'whatsapp-bg': '#F0F5F1', // Added WhatsApp background color from proposal
       },
       borderRadius: {
         lg: 'var(--radius)',

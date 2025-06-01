@@ -9,11 +9,27 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
 import { Button } from "@/components/ui/button";
-import { PlayCircle, UserCircle, FileUp, XCircle } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PlayCircle, UserCircle, FileUp, XCircle, MoreVertical, Edit2, Trash2, FileSpreadsheet } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+
+import { ScrollArea } from "@/components/ui/scroll-area";
+import * as XLSX from 'xlsx';
+import { useToast } from "@/hooks/use-toast";
+import { PlusCircle } from "lucide-react";
 
 
 const TYPING_SPEED_MS = 80;
@@ -130,7 +146,7 @@ export default function ChatterSimPage() {
 
         if (item.type === "text") {
           setShowSendButton(false);
-          playSound(SOUND_MY_TYPING); 
+          playSound(SOUND_MY_TYPING);
           for (let i = 0; i < item.content.length; i++) {
             setCurrentTypingText(item.content.substring(0, i + 1));
             await delay(TYPING_SPEED_MS);
@@ -151,20 +167,20 @@ export default function ChatterSimPage() {
         } else if (item.type === "audio") {
           playSound(SOUND_MY_AUDIO_RECORD_START);
           setIsRecordingAudio(true);
-          setCurrentTypingText(""); 
-          setShowSendButton(false); 
+          setCurrentTypingText("");
+          setShowSendButton(false);
 
-          if (item.content) { 
+          if (item.content) {
             const audio = new Audio(item.content);
             const playbackPromise = new Promise<void>((resolve, reject) => {
               audio.oncanplaythrough = () => audio.play().catch(err => {
                 console.error("Error playing recording sim audio:", err);
-                resolve(); 
+                resolve();
               });
               audio.onended = resolve;
               audio.onerror = (e) => {
                 console.error("Error during recording sim audio playback:", e);
-                resolve(); 
+                resolve();
               };
               audio.load();
             });
@@ -174,7 +190,7 @@ export default function ChatterSimPage() {
                 console.error("Failed to play audio during 'me' sending simulation, falling back to duration:", error);
                 await delay(item.audioDuration || 2000);
             }
-          } else { 
+          } else {
             await delay(item.audioDuration || 2000);
           }
 
@@ -182,7 +198,7 @@ export default function ChatterSimPage() {
           sentMessageId = addMessage({
             sender: "me",
             type: "audio",
-            content: item.content, 
+            content: item.content,
             audioDuration: item.audioDuration,
             ticks: "sent"
           });
@@ -277,7 +293,7 @@ export default function ChatterSimPage() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-slate-200 dark:bg-slate-800 p-4 gap-4">
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-200 dark:bg-slate-900 p-4 gap-4">
       <div className="md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-2rem)] flex flex-col gap-4">
         <Card>
           <CardHeader>
@@ -358,7 +374,7 @@ export default function ChatterSimPage() {
               showSendButton={showSendButton}
             />
           )}
-          <div className="p-4 border-t bg-background">
+          <div className="p-4 border-t bg-background dark:bg-primary/10">
             <Button
               onClick={() => simulateChat(customMessageQueue)}
               disabled={isSimulating || customMessageQueue.length === 0}

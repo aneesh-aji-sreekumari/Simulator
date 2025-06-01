@@ -3,10 +3,10 @@ import { Input } from "@/components/ui/input";
 import { Paperclip, Mic, Send, Smile } from "lucide-react";
 
 interface KeypadAreaProps {
-  isSimulating: boolean; // True if any simulation is active (typing, recording)
+  isSimulating: boolean; 
   isRecordingAudio: boolean;
-  typedText: string; // Text being "typed" out
-  onSendMessage?: () => void; // To be called when send is "clicked"
+  typedText: string; 
+  onSendMessage?: () => void; 
   showSendButton: boolean;
 }
 
@@ -23,7 +23,7 @@ export default function KeypadArea({
         <Smile className="text-muted-foreground" />
       </Button>
       
-      <div className="flex-grow bg-card rounded-full px-4 py-2 flex items-center text-sm min-h-[40px]">
+      <div className="flex-grow bg-input dark:bg-card rounded-full px-4 py-2 flex items-center text-sm min-h-[40px]">
         {isRecordingAudio ? (
           <div className="flex items-center text-red-500 w-full">
             <Mic size={20} className="mr-2 animate-pulse" />
@@ -42,11 +42,11 @@ export default function KeypadArea({
       </div>
 
       {showSendButton && !isRecordingAudio ? (
-        <Button size="icon" aria-label="Send message" onClick={onSendMessage} disabled={!typedText || isSimulating}>
+        <Button size="icon" aria-label="Send message" onClick={onSendMessage} disabled={!typedText || isSimulating} className="bg-primary text-primary-foreground hover:bg-primary/90">
           <Send />
         </Button>
       ) : (
-        <Button size="icon" aria-label={isRecordingAudio ? "Stop recording" : "Record audio"} disabled={isSimulating && !isRecordingAudio}>
+        <Button size="icon" aria-label={isRecordingAudio ? "Stop recording" : "Record audio"} disabled={isSimulating && !isRecordingAudio} className="bg-primary text-primary-foreground hover:bg-primary/90">
           <Mic />
         </Button>
       )}

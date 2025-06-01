@@ -28,7 +28,7 @@ export default function ChatWindow({ messages, showTypingIndicator, onAudioPlayb
   }, [messages, showTypingIndicator]);
 
   return (
-    <ScrollArea className="flex-grow p-4 bg-whatsapp-bg" ref={scrollAreaRef}>
+    <ScrollArea className="flex-grow p-4 bg-background" ref={scrollAreaRef}>
       <div className="flex flex-col space-y-2" aria-live="polite">
         {messages.map((msg) => (
           <MessageBubble
