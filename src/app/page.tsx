@@ -9,7 +9,7 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
 import AppHeader from "@/components/layout/AppHeader";
-import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Image as ImageIcon, Music2, Play, Pause } from "lucide-react";
+import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Image as ImageIcon, Moon, Sun, Music2, Play, Pause } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -469,11 +469,12 @@ export default function ChatterSimPage() {
   };
 
 
-  const chatWindowHeight = "h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))]";
-  const fullScreenChatWindowHeight = "h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))]";
-
   const appHeaderHeight = "60px";
-  const appMainPaddingY = "32px";
+  const appMainPaddingY = "32px"; // Corresponds to p-4 on main element for non-fullscreen
+
+  const chatAreaHeightNonFullScreen = `h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))]`;
+  const chatAreaHeightFullScreen = `h-[calc(100vh-var(--app-header-height))]`;
+
 
   const dynamicStyles = {
     "--app-header-height": appHeaderHeight,
@@ -495,9 +496,9 @@ export default function ChatterSimPage() {
         onToggleTheme={handleThemeToggle}
       />
 
-      <main className={`flex-grow flex p-4 gap-4 ${isFullScreenChat ? 'justify-center items-start' : 'flex-col md:flex-row'}`}>
+      <main className={`flex-grow flex ${isFullScreenChat ? 'p-0 justify-center items-stretch' : 'p-4 gap-4 flex-col md:flex-row'}`}>
         {!isFullScreenChat && (
-          <div className="md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))] flex flex-col gap-4">
+          <div className={`md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))] flex flex-col gap-4`}>
             <Card>
               <CardHeader>
                 <CardTitle>Customize Chat</CardTitle>
@@ -613,9 +614,15 @@ export default function ChatterSimPage() {
           </div>
         )}
 
-        <div className={`flex flex-col items-center justify-start ${isFullScreenChat ? 'w-full max-w-xl' : 'flex-grow md:w-2/3 lg:w-3/4'}`}>
+        <div className={`flex flex-col items-center justify-start ${isFullScreenChat ? 'w-full h-full' : 'flex-grow md:w-2/3 lg:w-3/4'}`}>
             <div
-              className={`flex flex-col shadow-2xl overflow-hidden rounded-xl border-4 border-slate-700 dark:border-slate-600 ${isFullScreenChat ? `w-full ${fullScreenChatWindowHeight}` : `w-full max-w-sm ${chatWindowHeight} max-h-[750px]`} bg-background`}
+              className={`
+                flex flex-col overflow-hidden bg-background
+                ${isFullScreenChat
+                  ? `w-full ${chatAreaHeightFullScreen}`
+                  : `w-full max-w-sm ${chatAreaHeightNonFullScreen} max-h-[750px] shadow-2xl rounded-xl border-4 border-slate-700 dark:border-slate-600`
+                }
+              `}
             >
               <ChatHeader
                 name={friendName}
@@ -642,4 +649,3 @@ export default function ChatterSimPage() {
     </div>
   );
 }
-
