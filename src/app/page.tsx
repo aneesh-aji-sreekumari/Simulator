@@ -143,7 +143,7 @@ export default function ChatterSimPage() {
     const newUrl = e.target.value;
     setBgMusicUrlInput(newUrl);
     if (bgMusicIsUploaded) {
-        setBgMusicIsUploaded(false); 
+        setBgMusicIsUploaded(false);
     }
     if (!newUrl && !bgMusicIsUploaded) {
         setBgMusicSrc('');
@@ -152,14 +152,14 @@ export default function ChatterSimPage() {
   };
 
   const handleSetCurrentUrlAsBackgroundMusic = () => {
-    if (bgMusicUrlInput && !bgMusicIsUploaded) { 
+    if (bgMusicUrlInput && !bgMusicIsUploaded) {
         setBgMusicSrc(bgMusicUrlInput);
         if (bgMusicFileInputRef.current) bgMusicFileInputRef.current.value = "";
-    } else if (!bgMusicUrlInput) { 
+    } else if (!bgMusicUrlInput) {
         clearBgMusic();
     }
   };
-  
+
   const handleBgMusicFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -167,7 +167,7 @@ export default function ChatterSimPage() {
       reader.onloadend = () => {
         setBgMusicSrc(reader.result as string);
         setBgMusicIsUploaded(true);
-        setBgMusicUrlInput(file.name); 
+        setBgMusicUrlInput(file.name);
       };
       reader.readAsDataURL(file);
     }
@@ -198,6 +198,9 @@ export default function ChatterSimPage() {
     const audio = bgAudioRef.current;
     if (audio) {
       if (isBgMusicPlaying && bgMusicSrc) {
+        if (audio.src !== bgMusicSrc) { // Ensure src is up to date
+          audio.src = bgMusicSrc;
+        }
         audio.play().catch(error => console.warn("BG Music play error:", error));
       } else {
         audio.pause();
@@ -306,7 +309,7 @@ export default function ChatterSimPage() {
                 audio.onerror = (e) => {
                   console.error("Error during recording sim audio playback:", e);
                   signal.removeEventListener('abort', onAbort);
-                  resolve(); 
+                  resolve();
                 };
                 audio.load();
               });
@@ -370,13 +373,13 @@ export default function ChatterSimPage() {
           let bgMusicPausedByThisMessage = false;
           if ((item.type === "audio" || item.type === "video") && item.content && isBgMusicPlaying) {
               bgMusicPausedByThisMessage = true;
-              setIsBgMusicPlaying(false); 
+              setIsBgMusicPlaying(false);
               try {
-                  await stoppableDelay(BG_MUSIC_PAUSE_DELAY_MS, signal); 
+                  await stoppableDelay(BG_MUSIC_PAUSE_DELAY_MS, signal);
               } catch (e) {
                   if (!(e instanceof DOMException && e.name === 'AbortError')) throw e;
               }
-              if (signal.aborted) return; 
+              if (signal.aborted) return;
           }
 
           if (item.type === "text") {
@@ -453,9 +456,9 @@ export default function ChatterSimPage() {
              playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
              await stoppableDelay(1500, signal);
           }
-          
+
           if (bgMusicPausedByThisMessage && !signal.aborted) {
-            setIsBgMusicPlaying(true); 
+            setIsBgMusicPlaying(true);
           }
         }
         if (signal.aborted) return;
@@ -470,11 +473,11 @@ export default function ChatterSimPage() {
     } finally {
       setIsSimulating(false);
       setShowKeypadInputArea(false);
-      setIsBgMusicPlaying(false); 
+      setIsBgMusicPlaying(false);
       simulationAbortControllerRef.current = null;
     }
   };
-  
+
   const handleStartSimulation = () => {
     simulateChat(customMessageQueue);
     if (bgMusicSrc) {
@@ -486,7 +489,7 @@ export default function ChatterSimPage() {
     if (simulationAbortControllerRef.current) {
       simulationAbortControllerRef.current.abort();
     }
-    setIsBgMusicPlaying(false); 
+    setIsBgMusicPlaying(false);
   };
 
   const handleResetSimulation = () => {
@@ -500,15 +503,15 @@ export default function ChatterSimPage() {
     setShowKeypadInputArea(false);
     setShowSendButton(false);
     setIsSimulating(false);
-    setIsBgMusicPlaying(false); 
+    setIsBgMusicPlaying(false);
   };
 
 
   const chatWindowHeight = "h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))]";
   const fullScreenChatWindowHeight = "h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))]";
-  
-  const appHeaderHeight = "60px"; 
-  const appMainPaddingY = "32px"; 
+
+  const appHeaderHeight = "60px";
+  const appMainPaddingY = "32px";
 
   const dynamicStyles = {
     "--app-header-height": appHeaderHeight,
@@ -527,7 +530,7 @@ export default function ChatterSimPage() {
         isSimulating={isSimulating}
         canSimulate={customMessageQueue.length > 0}
       />
-      
+
       <main className={`flex-grow flex p-4 gap-4 ${isFullScreenChat ? 'justify-center items-start' : 'flex-col md:flex-row'}`}>
         {!isFullScreenChat && (
           <div className="md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))] flex flex-col gap-4">
@@ -606,19 +609,19 @@ export default function ChatterSimPage() {
                       onChange={handleBgMusicUrlInputChange}
                       placeholder="Enter music URL or see file name"
                       className="flex-grow"
-                      disabled={bgMusicIsUploaded && !!bgMusicSrc} 
+                      disabled={bgMusicIsUploaded && !!bgMusicSrc}
                     />
                     {bgMusicUrlInput && !bgMusicIsUploaded && (
                         <Button onClick={handleSetCurrentUrlAsBackgroundMusic} size="sm" variant="outline" className="flex-shrink-0">Set URL</Button>
                     )}
                   </div>
                 </div>
-                
+
                 <div className="text-sm text-muted-foreground text-center my-1">OR</div>
-                
+
                 <div className="flex items-center gap-2">
-                    <Label 
-                        htmlFor="bg-music-file-input" 
+                    <Label
+                        htmlFor="bg-music-file-input"
                         className={`w-full inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-4 py-2 ${!!bgMusicUrlInput && !bgMusicIsUploaded ? 'bg-secondary/50 cursor-not-allowed' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer'}`}
                     >
                         <FileUpIcon className="mr-2 h-4 w-4" /> Upload Music File
@@ -659,15 +662,11 @@ export default function ChatterSimPage() {
                   </>
                 )}
                 {bgMusicSrc && (
-                  <audio 
-                      ref={bgAudioRef} 
-                      src={bgMusicSrc} 
-                      loop 
-                      onCanPlay={() => { 
-                          if (isBgMusicPlaying && bgAudioRef.current && bgAudioRef.current.paused) {
-                               bgAudioRef.current.play().catch(e => console.warn("Autoplay onCanPlay failed:", e));
-                          }
-                      }}
+                  <audio
+                      ref={bgAudioRef}
+                      src={bgMusicSrc}
+                      loop
+                      // Removed onCanPlay handler to prevent interference with useEffect-driven playback
                   />
                 )}
               </CardContent>
@@ -705,3 +704,4 @@ export default function ChatterSimPage() {
     </div>
   );
 }
+
