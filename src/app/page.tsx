@@ -9,11 +9,12 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
 import AppHeader from "@/components/layout/AppHeader";
-import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Image as ImageIcon } from "lucide-react";
+import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Image as ImageIcon, Music2, Play, Pause } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import NextImage from "next/image";
 
 
@@ -71,17 +72,18 @@ export default function ChatterSimPage() {
 
   const [isFullScreenChat, setIsFullScreenChat] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<string | undefined>(undefined);
+  const [soundEffectsVolume, setSoundEffectsVolume] = useState<number>(1);
+
 
   useEffect(() => {
     const storedTheme = localStorage.getItem('theme');
-    // Default to 'light' if no theme is stored or if the stored value is not 'dark'
     const initialTheme = storedTheme === 'dark' ? 'dark' : 'light';
     setCurrentTheme(initialTheme);
   }, []);
 
   useEffect(() => {
     if (currentTheme === undefined) {
-      return; // Wait for initialization
+      return; 
     }
     if (currentTheme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -104,6 +106,7 @@ export default function ChatterSimPage() {
   const playSound = (soundUrl: string) => {
     try {
       const audio = new Audio(soundUrl);
+      audio.volume = soundEffectsVolume;
       audio.play().catch(error => console.warn(`Failed to play sound ${soundUrl}:`, error));
     } catch (error) {
       console.warn(`Error creating audio for ${soundUrl}:`, error);
@@ -192,6 +195,7 @@ export default function ChatterSimPage() {
     }
   };
 
+
   const simulateChat = async (queue: MessageQueueItem[]) => {
     if (!queue || queue.length === 0) {
       console.warn("Message queue is empty. Nothing to simulate.");
@@ -227,6 +231,7 @@ export default function ChatterSimPage() {
 
             const typingLoopSound = new Audio(SOUND_MY_TYPING);
             typingLoopSound.loop = true;
+            typingLoopSound.volume = soundEffectsVolume;
             let typingSoundActuallyPlayed = false;
 
             try {
@@ -269,6 +274,7 @@ export default function ChatterSimPage() {
 
             if (item.content) {
               const audio = new Audio(item.content);
+              audio.volume = soundEffectsVolume; 
               const playbackPromise = new Promise<void>((resolvePlayback, rejectPlayback) => {
                 if (signal.aborted) return rejectPlayback(new DOMException("Aborted", "AbortError"));
                 const onAbort = () => {
@@ -495,7 +501,7 @@ export default function ChatterSimPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Customize Chat</CardTitle>
-                <CardDescription>Set name, avatar, and chat wallpaper.</CardDescription>
+                <CardDescription>Set name, avatar, wallpaper, and sound volume.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
@@ -588,6 +594,18 @@ export default function ChatterSimPage() {
                     )}
                   </div>
                 </div>
+                <div className="space-y-1 border-t pt-4">
+                  <Label htmlFor="soundEffectsVolume">Sound Effects Volume ({Math.round(soundEffectsVolume * 100)}%)</Label>
+                  <Slider
+                    id="soundEffectsVolume"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={[soundEffectsVolume]}
+                    onValueChange={(value) => setSoundEffectsVolume(value[0])}
+                    aria-label="Sound effects volume"
+                  />
+                </div>
               </CardContent>
             </Card>
 
@@ -624,3 +642,4 @@ export default function ChatterSimPage() {
     </div>
   );
 }
+
