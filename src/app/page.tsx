@@ -8,9 +8,8 @@ import ChatHeader from "@/components/chat/ChatHeader";
 import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
-import AppHeader from "@/components/layout/AppHeader"; // New import
-import { Button } from "@/components/ui/button";
-import { PlayCircle, UserCircle, FileUp, XCircle } from "lucide-react";
+import AppHeader from "@/components/layout/AppHeader";
+import { UserCircle, FileUp, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -21,7 +20,19 @@ const TYPING_SPEED_MS = 80;
 const FRIEND_TYPING_INDICATOR_DURATION_MS = 1500;
 const READING_WORDS_PER_MINUTE = 200;
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const stoppableDelay = (ms: number, signal: AbortSignal) => {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      return reject(new DOMException("Aborted", "AbortError"));
+    }
+    const timeoutId = setTimeout(resolve, ms);
+    signal.addEventListener('abort', () => {
+      clearTimeout(timeoutId);
+      reject(new DOMException("Aborted", "AbortError"));
+    });
+  });
+};
+
 
 const SOUND_MY_MESSAGE_SENT = "/sounds/my_message_sent.mp3";
 const SOUND_FRIEND_MESSAGE_RECEIVED = "/sounds/friend_message_received.mp3";
@@ -46,6 +57,7 @@ export default function ChatterSimPage() {
   const [friendName, setFriendName] = useState<string>("Alice");
   const [friendAvatarUrl, setFriendAvatarUrl] = useState<string>("https://placehold.co/80x80.png");
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const simulationAbortControllerRef = useRef<AbortController | null>(null);
 
   const audioCompletionPromises = useRef<Record<string, () => void>>({});
   const videoCompletionPromises = useRef<Record<string, () => void>>({});
@@ -118,6 +130,10 @@ export default function ChatterSimPage() {
       console.warn("Message queue is empty. Nothing to simulate.");
       return;
     }
+
+    simulationAbortControllerRef.current = new AbortController();
+    const signal = simulationAbortControllerRef.current.signal;
+
     setIsSimulating(true);
     setShowKeypadInputArea(false);
     setCurrentTypingText("");
@@ -125,187 +141,262 @@ export default function ChatterSimPage() {
     setShowFriendTypingIndicator(false);
     setMessages([]);
 
-    await delay(500);
+    try {
+      await stoppableDelay(500, signal);
 
-    for (const item of queue) {
-      if (item.sender === "me") {
-        setShowKeypadInputArea(true);
-        await delay(300);
+      for (const item of queue) {
+        if (signal.aborted) return;
 
-        let sentMessageId: string | undefined;
+        if (item.sender === "me") {
+          setShowKeypadInputArea(true);
+          await stoppableDelay(300, signal);
+          if (signal.aborted) return;
 
-        if (item.type === "text") {
-          setShowSendButton(false);
-          playSound(SOUND_MY_TYPING);
-          for (let i = 0; i < item.content.length; i++) {
-            setCurrentTypingText(item.content.substring(0, i + 1));
-            await delay(TYPING_SPEED_MS);
-          }
-          setShowSendButton(true);
-          await delay(500);
+          let sentMessageId: string | undefined;
 
-          sentMessageId = addMessage({
-            sender: "me",
-            type: "text",
-            content: item.content,
-            ticks: "sent"
-          });
-          playSound(SOUND_MY_MESSAGE_SENT);
-          setCurrentTypingText("");
-          setShowSendButton(false);
-
-        } else if (item.type === "audio") {
-          playSound(SOUND_MY_AUDIO_RECORD_START);
-          setIsRecordingAudio(true);
-          setCurrentTypingText("");
-          setShowSendButton(false);
-
-          if (item.content) {
-            const audio = new Audio(item.content);
-            const playbackPromise = new Promise<void>((resolve, reject) => {
-              audio.oncanplaythrough = () => audio.play().catch(err => {
-                console.error("Error playing recording sim audio:", err);
-                resolve();
-              });
-              audio.onended = resolve;
-              audio.onerror = (e) => {
-                console.error("Error during recording sim audio playback:", e);
-                resolve();
-              };
-              audio.load();
-            });
-            try {
-              await playbackPromise;
-            } catch (error) {
-                console.error("Failed to play audio during 'me' sending simulation, falling back to duration:", error);
-                await delay(item.audioDuration || 2000);
+          if (item.type === "text") {
+            setShowSendButton(false);
+            playSound(SOUND_MY_TYPING);
+            for (let i = 0; i < item.content.length; i++) {
+              if (signal.aborted) return;
+              setCurrentTypingText(item.content.substring(0, i + 1));
+              await stoppableDelay(TYPING_SPEED_MS, signal);
             }
-          } else {
-            await delay(item.audioDuration || 2000);
-          }
+            setShowSendButton(true);
+            await stoppableDelay(500, signal);
+            if (signal.aborted) return;
 
-          setIsRecordingAudio(false);
-          sentMessageId = addMessage({
-            sender: "me",
-            type: "audio",
-            content: item.content,
-            audioDuration: item.audioDuration,
-            ticks: "sent"
-          });
-          playSound(SOUND_MY_AUDIO_SENT);
+            sentMessageId = addMessage({
+              sender: "me",
+              type: "text",
+              content: item.content,
+              ticks: "sent"
+            });
+            playSound(SOUND_MY_MESSAGE_SENT);
+            setCurrentTypingText("");
+            setShowSendButton(false);
 
-        } else if (item.type === "image" || item.type === "gif" || item.type === "sticker" || item.type === "video") {
-          setCurrentTypingText(`Sending ${item.type}...`);
-          setShowSendButton(true);
-          await delay(700);
+          } else if (item.type === "audio") {
+            playSound(SOUND_MY_AUDIO_RECORD_START);
+            setIsRecordingAudio(true);
+            setCurrentTypingText("");
+            setShowSendButton(false);
 
-          sentMessageId = addMessage({
-            sender: "me",
-            type: item.type,
-            content: item.content,
-            videoDuration: item.videoDuration,
-            ticks: "sent"
-          });
-          playSound(SOUND_MY_MESSAGE_SENT);
-          setCurrentTypingText("");
-          setShowSendButton(false);
-        }
+            if (item.content) {
+              const audio = new Audio(item.content);
+              const playbackPromise = new Promise<void>((resolve, reject) => {
+                if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
+                const onAbort = () => {
+                    audio.pause();
+                    reject(new DOMException("Aborted", "AbortError"));
+                };
+                signal.addEventListener('abort', onAbort, { once: true });
 
-        if (sentMessageId) {
-          await delay(300);
-          updateMessageTicks(sentMessageId, "delivered");
-        }
-        setShowKeypadInputArea(false);
+                audio.oncanplaythrough = () => audio.play().catch(err => {
+                  console.error("Error playing recording sim audio:", err);
+                  signal.removeEventListener('abort', onAbort);
+                  resolve();
+                });
+                audio.onended = () => {
+                    signal.removeEventListener('abort', onAbort);
+                    resolve();
+                };
+                audio.onerror = (e) => {
+                  console.error("Error during recording sim audio playback:", e);
+                  signal.removeEventListener('abort', onAbort);
+                  resolve(); // Resolve on error to continue simulation
+                };
+                audio.load();
+              });
+              await playbackPromise;
+            } else {
+              await stoppableDelay(item.audioDuration || 2000, signal);
+            }
+            if (signal.aborted) return;
 
-      } else { 
-        setShowKeypadInputArea(false);
-        setShowFriendTypingIndicator(true);
-        playSound(SOUND_FRIEND_TYPING);
-        await delay(FRIEND_TYPING_INDICATOR_DURATION_MS);
-        setShowFriendTypingIndicator(false);
-
-        if (item.type === "text") {
-          addMessage({ sender: "friend", type: "text", content: item.content });
-          playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
-          const wordCount = item.content.split(/\s+/).length;
-          const readingTimeMs = (wordCount / READING_WORDS_PER_MINUTE) * 60 * 1000;
-          await delay(Math.max(readingTimeMs, 1000));
-
-        } else if (item.type === "audio") {
-           if (!item.content) {
-            console.warn("Friend's audio message has no content. Skipping playback wait.");
-            addMessage({ sender: "friend", type: "audio", content: "", isPlaying: false, audioDuration: item.audioDuration });
-            playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
-            await delay(item.audioDuration || 1000);
-          } else {
-            const audioMessageId = addMessage({
-              sender: "friend",
+            setIsRecordingAudio(false);
+            sentMessageId = addMessage({
+              sender: "me",
               type: "audio",
               content: item.content,
-              isPlaying: true,
-              audioDuration: item.audioDuration
+              audioDuration: item.audioDuration,
+              ticks: "sent"
             });
-            playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
-            await new Promise<void>(resolve => {
-               audioCompletionPromises.current[audioMessageId] = resolve;
-            });
-          }
-        } else if (item.type === "video") {
-          if (!item.content) {
-             console.warn("Friend's video message has no content. Skipping playback wait.");
-             addMessage({ sender: "friend", type: "video", content: "", isVideoPlaying: false, videoDuration: item.videoDuration });
-             playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
-             await delay(item.videoDuration || 2000);
-          } else {
-            const videoMessageId = addMessage({
-              sender: "friend",
-              type: "video",
-              content: item.content,
-              isVideoPlaying: true,
-              videoDuration: item.videoDuration
-            });
-            playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
-            await new Promise<void>(resolve => {
-               videoCompletionPromises.current[videoMessageId] = resolve;
-            });
-          }
-        } else if (item.type === "image" || item.type === "gif" || item.type === "sticker") {
-           addMessage({ sender: "friend", type: item.type, content: item.content });
-           playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
-           await delay(1500);
-        }
-      }
-      await delay(item.delayAfter);
-    }
+            playSound(SOUND_MY_AUDIO_SENT);
 
-    setIsSimulating(false);
-    setShowKeypadInputArea(false);
+          } else if (item.type === "image" || item.type === "gif" || item.type === "sticker" || item.type === "video") {
+            setCurrentTypingText(`Sending ${item.type}...`);
+            setShowSendButton(true);
+            await stoppableDelay(700, signal);
+            if (signal.aborted) return;
+
+            sentMessageId = addMessage({
+              sender: "me",
+              type: item.type,
+              content: item.content,
+              videoDuration: item.videoDuration,
+              ticks: "sent"
+            });
+            playSound(SOUND_MY_MESSAGE_SENT);
+            setCurrentTypingText("");
+            setShowSendButton(false);
+          }
+
+          if (sentMessageId) {
+            await stoppableDelay(300, signal);
+            if (signal.aborted) return;
+            updateMessageTicks(sentMessageId, "delivered");
+          }
+          setShowKeypadInputArea(false);
+
+        } else { 
+          setShowKeypadInputArea(false);
+          setShowFriendTypingIndicator(true);
+          playSound(SOUND_FRIEND_TYPING);
+          await stoppableDelay(FRIEND_TYPING_INDICATOR_DURATION_MS, signal);
+          if (signal.aborted) return;
+          setShowFriendTypingIndicator(false);
+
+          if (item.type === "text") {
+            addMessage({ sender: "friend", type: "text", content: item.content });
+            playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
+            const wordCount = item.content.split(/\s+/).length;
+            const readingTimeMs = (wordCount / READING_WORDS_PER_MINUTE) * 60 * 1000;
+            await stoppableDelay(Math.max(readingTimeMs, 1000), signal);
+
+          } else if (item.type === "audio") {
+            if (!item.content) {
+              console.warn("Friend's audio message has no content. Skipping playback wait.");
+              addMessage({ sender: "friend", type: "audio", content: "", isPlaying: false, audioDuration: item.audioDuration });
+              playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
+              await stoppableDelay(item.audioDuration || 1000, signal);
+            } else {
+              const audioMessageId = addMessage({
+                sender: "friend",
+                type: "audio",
+                content: item.content,
+                isPlaying: true,
+                audioDuration: item.audioDuration
+              });
+              playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
+              await new Promise<void>((resolve, reject) => {
+                 if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
+                 const onAbort = () => {
+                    const audioToStop = document.getElementById(`audio-${audioMessageId}`) as HTMLAudioElement;
+                    if(audioToStop) audioToStop.pause();
+                    reject(new DOMException("Aborted", "AbortError"));
+                 };
+                 signal.addEventListener('abort', onAbort, { once: true });
+                 audioCompletionPromises.current[audioMessageId] = () => {
+                    signal.removeEventListener('abort', onAbort);
+                    resolve();
+                 };
+              });
+            }
+          } else if (item.type === "video") {
+            if (!item.content) {
+               console.warn("Friend's video message has no content. Skipping playback wait.");
+               addMessage({ sender: "friend", type: "video", content: "", isVideoPlaying: false, videoDuration: item.videoDuration });
+               playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
+               await stoppableDelay(item.videoDuration || 2000, signal);
+            } else {
+              const videoMessageId = addMessage({
+                sender: "friend",
+                type: "video",
+                content: item.content,
+                isVideoPlaying: true,
+                videoDuration: item.videoDuration
+              });
+              playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
+              await new Promise<void>((resolve, reject) => {
+                 if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
+                 const onAbort = () => {
+                    const videoToStop = document.getElementById(`video-${videoMessageId}`) as HTMLVideoElement;
+                    if(videoToStop) videoToStop.pause();
+                    reject(new DOMException("Aborted", "AbortError"));
+                 };
+                 signal.addEventListener('abort', onAbort, { once: true });
+                 videoCompletionPromises.current[videoMessageId] = () => {
+                    signal.removeEventListener('abort', onAbort);
+                    resolve();
+                 };
+              });
+            }
+          } else if (item.type === "image" || item.type === "gif" || item.type === "sticker") {
+             addMessage({ sender: "friend", type: item.type, content: item.content });
+             playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
+             await stoppableDelay(1500, signal);
+          }
+        }
+        if (signal.aborted) return;
+        await stoppableDelay(item.delayAfter, signal);
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        console.log("Simulation was aborted by user.");
+      } else {
+        console.error("Error during simulation:", error);
+      }
+    } finally {
+      setIsSimulating(false);
+      setShowKeypadInputArea(false);
+      simulationAbortControllerRef.current = null;
+    }
+  };
+  
+  const handleStartSimulation = () => {
+    simulateChat(customMessageQueue);
   };
 
-  const chatWindowHeight = "h-[calc(100vh-var(--app-header-height)-var(--chat-footer-height)-var(--page-padding-y))]";
-  const fullScreenChatWindowHeight = "h-[calc(100vh-var(--app-header-height)-var(--chat-footer-height)-var(--full-screen-padding-y))]";
+  const handleStopSimulation = () => {
+    if (simulationAbortControllerRef.current) {
+      simulationAbortControllerRef.current.abort();
+    }
+    // setIsSimulating will be set to false in simulateChat's finally block or abort handler
+  };
+
+  const handleResetSimulation = () => {
+    if (simulationAbortControllerRef.current) {
+      simulationAbortControllerRef.current.abort();
+    }
+    setMessages([]);
+    setCurrentTypingText("");
+    setShowFriendTypingIndicator(false);
+    setIsRecordingAudio(false);
+    setShowKeypadInputArea(false);
+    setShowSendButton(false);
+    setIsSimulating(false);
+  };
+
+
+  const chatWindowHeight = "h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))]";
+  const fullScreenChatWindowHeight = "h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))]";
   
-  // Approximate heights for calculation, adjust as needed
-  const appHeaderHeight = "60px"; // Adjust based on actual AppHeader height
-  const chatFooterHeight = "76px"; // Approximate height of the "Simulate Chat" button area
-  const pagePaddingY = "32px"; // 2 * p-4 (1rem = 16px)
-  const fullScreenPaddingY = "16px"; // p-4 for full screen container
+  const appHeaderHeight = "60px"; 
+  const appMainPaddingY = "32px"; // Sum of p-4 top and p-4 bottom for main element
 
   const dynamicStyles = {
     "--app-header-height": appHeaderHeight,
-    "--chat-footer-height": chatFooterHeight,
-    "--page-padding-y": pagePaddingY,
-    "--full-screen-padding-y": fullScreenPaddingY,
+    "--app-main-padding-y": appMainPaddingY,
+    // --chat-footer-height is no longer needed here as the button moved
   } as React.CSSProperties;
 
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-200 dark:bg-slate-900" style={dynamicStyles}>
-      <AppHeader isFullScreenChat={isFullScreenChat} onToggleFullScreen={toggleFullScreenChat} />
+      <AppHeader
+        isFullScreenChat={isFullScreenChat}
+        onToggleFullScreen={toggleFullScreenChat}
+        onStartSimulation={handleStartSimulation}
+        onStopSimulation={handleStopSimulation}
+        onResetSimulation={handleResetSimulation}
+        isSimulating={isSimulating}
+        canSimulate={customMessageQueue.length > 0}
+      />
       
       <main className={`flex-grow flex p-4 gap-4 ${isFullScreenChat ? 'justify-center items-start' : 'flex-col md:flex-row'}`}>
         {!isFullScreenChat && (
-          <div className="md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-var(--app-header-height)-var(--page-padding-y))] flex flex-col gap-4">
+          <div className="md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))] flex flex-col gap-4">
             <Card>
               <CardHeader>
                 <CardTitle>Customize Friend</CardTitle>
@@ -369,7 +460,6 @@ export default function ChatterSimPage() {
           </div>
         )}
 
-        {/* Chat Simulation Area */}
         <div className={`flex flex-col items-center justify-start ${isFullScreenChat ? 'w-full max-w-xl' : 'flex-grow md:w-2/3 lg:w-3/4'}`}>
             <div className={`bg-background flex flex-col shadow-2xl overflow-hidden rounded-xl border-4 border-slate-700 dark:border-slate-600 ${isFullScreenChat ? `w-full ${fullScreenChatWindowHeight}` : `w-full max-w-sm ${chatWindowHeight} max-h-[750px]`}`}>
               <ChatHeader
@@ -392,18 +482,7 @@ export default function ChatterSimPage() {
                   showSendButton={showSendButton}
                 />
               )}
-              <div className="border-t bg-background dark:bg-primary/10 p-4">
-                <Button
-                  onClick={() => simulateChat(customMessageQueue)}
-                  disabled={isSimulating || customMessageQueue.length === 0}
-                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                  size="default"
-                  aria-label="Start chat simulation"
-                >
-                  <PlayCircle className="mr-2 h-5 w-5" />
-                  {isSimulating ? "Simulating..." : "Simulate Chat"}
-                </Button>
-              </div>
+              {/* Simulate Chat Button is now removed from here and moved to AppHeader */}
             </div>
         </div>
       </main>
