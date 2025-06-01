@@ -54,9 +54,7 @@ export default function AppHeader({
           onClick={onResetSimulation}
           variant="ghost"
           size="iconSm"
-          disabled={isSimulating && messages.length === 0} // disable reset if simulating and no messages yet? Or just disable if simulating?
-                                                          // For now, allow reset even if simulating to stop and clear.
-                                                          // Or, disable if !isSimulating && messages.length === 0
+          disabled={!isSimulating && !canSimulate} // Corrected: Disable if not simulating AND queue is empty
           aria-label="Reset chat simulation"
           className="hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-primary-foreground/50"
           title="Reset Simulation"
