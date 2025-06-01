@@ -223,6 +223,9 @@ export default function ChatterSimPage() {
     const signal = simulationAbortControllerRef.current.signal;
 
     setIsSimulating(true);
+    if (bgMusicSrc) {
+      setIsBgMusicPlaying(true);
+    }
     setShowKeypadInputArea(false);
     setCurrentTypingText("");
     setIsRecordingAudio(false);
@@ -428,6 +431,7 @@ export default function ChatterSimPage() {
     } finally {
       setIsSimulating(false);
       setShowKeypadInputArea(false);
+      setIsBgMusicPlaying(false);
       simulationAbortControllerRef.current = null;
     }
   };
@@ -440,6 +444,7 @@ export default function ChatterSimPage() {
     if (simulationAbortControllerRef.current) {
       simulationAbortControllerRef.current.abort();
     }
+    setIsBgMusicPlaying(false);
   };
 
   const handleResetSimulation = () => {
@@ -453,6 +458,7 @@ export default function ChatterSimPage() {
     setShowKeypadInputArea(false);
     setShowSendButton(false);
     setIsSimulating(false);
+    setIsBgMusicPlaying(false);
   };
 
 
