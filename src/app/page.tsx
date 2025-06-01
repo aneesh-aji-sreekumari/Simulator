@@ -161,12 +161,31 @@ export default function ChatterSimPage() {
 
           if (item.type === "text") {
             setShowSendButton(false);
-            playSound(SOUND_MY_TYPING);
-            for (let charIndex = 0; charIndex < item.content.length; charIndex++) {
-              if (signal.aborted) return;
-              setCurrentTypingText(item.content.substring(0, charIndex + 1));
-              await stoppableDelay(TYPING_SPEED_MS, signal);
+            
+            const typingLoopSound = new Audio(SOUND_MY_TYPING);
+            typingLoopSound.loop = true;
+            let typingSoundActuallyPlayed = false;
+
+            try {
+              if (item.content.length > 0) {
+                typingLoopSound.play().catch(err => console.warn("Error playing looping typing sound:", err));
+                typingSoundActuallyPlayed = true;
+              }
+
+              for (let charIndex = 0; charIndex < item.content.length; charIndex++) {
+                // stoppableDelay will throw if aborted, caught by outer try/catch of simulateChat
+                setCurrentTypingText(item.content.substring(0, charIndex + 1));
+                await stoppableDelay(TYPING_SPEED_MS, signal);
+              }
+            } finally {
+              if (typingSoundActuallyPlayed) {
+                typingLoopSound.pause();
+                // Not resetting currentTime as a new Audio object is created each time
+              }
             }
+            
+            if (signal.aborted) return; // Check signal again after typing loop / potential abort
+
             setShowSendButton(true);
             await stoppableDelay(500, signal);
             if (signal.aborted) return;
@@ -187,7 +206,7 @@ export default function ChatterSimPage() {
             setCurrentTypingText("");
             setShowSendButton(false);
 
-            if (item.content) { // If there's actual audio content for "my" message to play
+            if (item.content) { 
               const audio = new Audio(item.content);
               const playbackPromise = new Promise<void>((resolvePlayback, rejectPlayback) => {
                 if (signal.aborted) return rejectPlayback(new DOMException("Aborted", "AbortError"));
