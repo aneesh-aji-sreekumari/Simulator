@@ -8,8 +8,9 @@ import ChatHeader from "@/components/chat/ChatHeader";
 import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
+import AppHeader from "@/components/layout/AppHeader"; // New import
 import { Button } from "@/components/ui/button";
-import { PlayCircle, UserCircle, FileUp, XCircle, MoreVertical, Edit2, Trash2, FileSpreadsheet, Maximize, Minimize, Settings } from "lucide-react";
+import { PlayCircle, UserCircle, FileUp, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -281,138 +282,96 @@ export default function ChatterSimPage() {
     setShowKeypadInputArea(false);
   };
 
-  if (isFullScreenChat) {
-    return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-200 dark:bg-slate-900 p-2 sm:p-4">
-        <div className="absolute top-2 right-2 z-10">
-          <Button
-            onClick={toggleFullScreenChat}
-            variant="outline"
-            size="icon"
-            aria-label="Exit full screen"
-          >
-            <Minimize className="h-5 w-5" />
-          </Button>
-        </div>
-        <div className="bg-background flex flex-col shadow-2xl overflow-hidden w-full h-full max-w-lg md:max-w-xl rounded-lg border-2 border-slate-700 dark:border-slate-600">
-          <ChatHeader
-            name={friendName}
-            avatarUrl={friendAvatarUrl || undefined}
-            isOnline={isSimulating || showFriendTypingIndicator}
-          />
-          <ChatWindow
-            messages={messages}
-            showTypingIndicator={showFriendTypingIndicator}
-            onAudioPlaybackEnd={handleAudioPlaybackEnd}
-            onVideoPlaybackEnd={handleVideoPlaybackEnd}
-            friendAvatarUrl={friendAvatarUrl}
-          />
-          {(showKeypadInputArea || isRecordingAudio) && (
-            <KeypadArea
-              isSimulating={isSimulating && (currentTypingText !== "" || isRecordingAudio)}
-              isRecordingAudio={isRecordingAudio}
-              typedText={currentTypingText}
-              showSendButton={showSendButton}
-            />
-          )}
-          <div className="border-t bg-background dark:bg-primary/10 p-3">
-            <Button
-              onClick={() => simulateChat(customMessageQueue)}
-              disabled={isSimulating || customMessageQueue.length === 0}
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-              size="default"
-              aria-label="Start chat simulation"
-            >
-              <PlayCircle className="h-5 w-5 mr-2" />
-              {isSimulating ? "Simulating..." : "Simulate Chat"}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const chatWindowHeight = "h-[calc(100vh-var(--app-header-height)-var(--chat-footer-height)-var(--page-padding-y))]";
+  const fullScreenChatWindowHeight = "h-[calc(100vh-var(--app-header-height)-var(--chat-footer-height)-var(--full-screen-padding-y))]";
+  
+  // Approximate heights for calculation, adjust as needed
+  const appHeaderHeight = "60px"; // Adjust based on actual AppHeader height
+  const chatFooterHeight = "76px"; // Approximate height of the "Simulate Chat" button area
+  const pagePaddingY = "32px"; // 2 * p-4 (1rem = 16px)
+  const fullScreenPaddingY = "16px"; // p-4 for full screen container
+
+  const dynamicStyles = {
+    "--app-header-height": appHeaderHeight,
+    "--chat-footer-height": chatFooterHeight,
+    "--page-padding-y": pagePaddingY,
+    "--full-screen-padding-y": fullScreenPaddingY,
+  } as React.CSSProperties;
+
 
   return (
-    <div className="flex min-h-screen bg-slate-200 dark:bg-slate-900 p-4 flex-col md:flex-row gap-4">
-      {/* Left Panel: Customization & Composer */}
-      <div className="md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-2rem)] flex flex-col gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Customize Friend</CardTitle>
-            <CardDescription>Set name and avatar for your chat partner.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="friendName">Friend's Name</Label>
-              <Input
-                id="friendName"
-                value={friendName}
-                onChange={(e) => setFriendName(e.target.value)}
-                placeholder="Enter friend's name"
-                className="mt-1"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="friendAvatarUrl">Friend's Avatar</Label>
-              <div className="flex items-center gap-2">
-                {friendAvatarUrl ? (
-                    <Image src={friendAvatarUrl} alt="Friend Avatar Preview" width={40} height={40} className="rounded-full object-cover border" data-ai-hint="profile avatar"/>
-                  ) : (
-                    <UserCircle className="h-10 w-10 text-muted-foreground" />
-                  )}
-                <Input
-                  id="friendAvatarUrl"
-                  value={isAvatarUploaded ? "Using uploaded file" : friendAvatarUrl}
-                  onChange={(e) => {
-                    if (avatarFileInputRef.current) avatarFileInputRef.current.value = "";
-                    setFriendAvatarUrl(e.target.value);
-                  }}
-                  placeholder="Enter avatar URL or upload"
-                  className="mt-1 flex-grow"
-                  disabled={isAvatarUploaded}
-                />
-              </div>
-              <div className="text-sm text-muted-foreground text-center my-1">OR</div>
-              <div className="flex gap-2 items-center">
-                <Label htmlFor="avatar-file-input" className={`w-full inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-4 py-2 ${isAvatarUploaded ? 'bg-secondary/50 cursor-not-allowed' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer'}`}>
-                  <FileUp className="mr-2 h-4 w-4" /> Upload Avatar
-                </Label>
-                <Input
-                  id="avatar-file-input"
-                  ref={avatarFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleAvatarFileChange}
-                  className="hidden"
-                  disabled={isAvatarUploaded}
-                />
-                 {isAvatarUploaded && (
-                  <Button variant="outline" size="iconSm" onClick={clearUploadedAvatar} aria-label="Clear uploaded avatar">
-                    <XCircle className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <MessageComposer queue={customMessageQueue} setQueue={setCustomMessageQueue} />
-      </div>
+    <div className="flex flex-col min-h-screen bg-slate-200 dark:bg-slate-900" style={dynamicStyles}>
+      <AppHeader isFullScreenChat={isFullScreenChat} onToggleFullScreen={toggleFullScreenChat} />
+      
+      <main className={`flex-grow flex p-4 gap-4 ${isFullScreenChat ? 'justify-center items-start' : 'flex-col md:flex-row'}`}>
+        {!isFullScreenChat && (
+          <div className="md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-var(--app-header-height)-var(--page-padding-y))] flex flex-col gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Customize Friend</CardTitle>
+                <CardDescription>Set name and avatar for your chat partner.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="friendName">Friend's Name</Label>
+                  <Input
+                    id="friendName"
+                    value={friendName}
+                    onChange={(e) => setFriendName(e.target.value)}
+                    placeholder="Enter friend's name"
+                    className="mt-1"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="friendAvatarUrl">Friend's Avatar</Label>
+                  <div className="flex items-center gap-2">
+                    {friendAvatarUrl ? (
+                        <Image src={friendAvatarUrl} alt="Friend Avatar Preview" width={40} height={40} className="rounded-full object-cover border" data-ai-hint="profile avatar"/>
+                      ) : (
+                        <UserCircle className="h-10 w-10 text-muted-foreground" />
+                      )}
+                    <Input
+                      id="friendAvatarUrl"
+                      value={isAvatarUploaded ? "Using uploaded file" : friendAvatarUrl}
+                      onChange={(e) => {
+                        if (avatarFileInputRef.current) avatarFileInputRef.current.value = "";
+                        setFriendAvatarUrl(e.target.value);
+                      }}
+                      placeholder="Enter avatar URL or upload"
+                      className="mt-1 flex-grow"
+                      disabled={isAvatarUploaded}
+                    />
+                  </div>
+                  <div className="text-sm text-muted-foreground text-center my-1">OR</div>
+                  <div className="flex gap-2 items-center">
+                    <Label htmlFor="avatar-file-input" className={`w-full inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-4 py-2 ${isAvatarUploaded ? 'bg-secondary/50 cursor-not-allowed' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer'}`}>
+                      <FileUp className="mr-2 h-4 w-4" /> Upload Avatar
+                    </Label>
+                    <Input
+                      id="avatar-file-input"
+                      ref={avatarFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarFileChange}
+                      className="hidden"
+                      disabled={isAvatarUploaded}
+                    />
+                     {isAvatarUploaded && (
+                      <Button variant="outline" size="iconSm" onClick={clearUploadedAvatar} aria-label="Clear uploaded avatar">
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <MessageComposer queue={customMessageQueue} setQueue={setCustomMessageQueue} />
+          </div>
+        )}
 
-      {/* Right Panel: Chat Simulation */}
-      <div className="flex flex-col items-center justify-start flex-grow md:w-2/3 lg:w-3/4 pt-0 md:pt-0"> {/* Adjusted pt for alignment */}
-        <div className="w-full max-w-sm relative">
-            <div className="absolute top-2 right-2 z-10"> {/* Positioned within the max-w-sm container */}
-                 <Button
-                    onClick={toggleFullScreenChat}
-                    variant="ghost" // Changed to ghost for less intrusion
-                    size="icon"
-                    aria-label="Enter full screen"
-                    className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-                 >
-                    <Maximize className="h-5 w-5" />
-                 </Button>
-            </div>
-            <div className="bg-background flex flex-col shadow-2xl overflow-hidden h-[calc(100vh-2rem-env(safe-area-inset-bottom)-64px)] sm:h-[calc(100vh-4rem-env(safe-area-inset-bottom)-64px)] max-h-[750px] rounded-xl border-4 border-slate-700 dark:border-slate-600 mt-8 md:mt-0"> {/* Added mt for button space */}
+        {/* Chat Simulation Area */}
+        <div className={`flex flex-col items-center justify-start ${isFullScreenChat ? 'w-full max-w-xl' : 'flex-grow md:w-2/3 lg:w-3/4'}`}>
+            <div className={`bg-background flex flex-col shadow-2xl overflow-hidden rounded-xl border-4 border-slate-700 dark:border-slate-600 ${isFullScreenChat ? `w-full ${fullScreenChatWindowHeight}` : `w-full max-w-sm ${chatWindowHeight} max-h-[750px]`}`}>
               <ChatHeader
                 name={friendName}
                 avatarUrl={friendAvatarUrl || undefined}
@@ -447,8 +406,7 @@ export default function ChatterSimPage() {
               </div>
             </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
-
