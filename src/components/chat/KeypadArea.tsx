@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Paperclip, Mic, Send, Smile } from "lucide-react";
@@ -8,6 +9,7 @@ interface KeypadAreaProps {
   typedText: string; 
   onSendMessage?: () => void; 
   showSendButton: boolean;
+  hasCustomWallpaper?: boolean;
 }
 
 export default function KeypadArea({ 
@@ -15,15 +17,16 @@ export default function KeypadArea({
   isRecordingAudio, 
   typedText, 
   onSendMessage,
-  showSendButton
+  showSendButton,
+  hasCustomWallpaper
 }: KeypadAreaProps) {
   return (
-    <footer className="bg-background p-3 border-t flex items-center gap-2">
+    <footer className={`p-3 border-t flex items-center gap-2 ${hasCustomWallpaper ? 'bg-transparent' : 'bg-background'}`}>
       <Button variant="ghost" size="icon" aria-label="Emoji">
         <Smile className="text-muted-foreground" />
       </Button>
       
-      <div className="flex-grow bg-input dark:bg-card rounded-full px-4 py-2 flex items-center text-sm min-h-[40px]">
+      <div className={`flex-grow rounded-full px-4 py-2 flex items-center text-sm min-h-[40px] ${hasCustomWallpaper ? 'bg-white/80 dark:bg-black/50' : 'bg-input dark:bg-card'}`}>
         {isRecordingAudio ? (
           <div className="flex items-center text-red-500 w-full">
             <Mic size={20} className="mr-2 animate-pulse" />

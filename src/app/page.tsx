@@ -9,12 +9,12 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
 import AppHeader from "@/components/layout/AppHeader";
-import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon } from "lucide-react";
+import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Image as ImageIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import Image from "next/image";
+import NextImage from "next/image";
 
 
 const TYPING_SPEED_MS = 80;
@@ -59,6 +59,12 @@ export default function ChatterSimPage() {
   const [friendName, setFriendName] = useState<string>("Alice");
   const [friendAvatarUrl, setFriendAvatarUrl] = useState<string>("https://placehold.co/80x80.png");
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
+
+  const [chatWallpaperUrl, setChatWallpaperUrl] = useState<string>("");
+  const [chatWallpaperUrlInput, setChatWallpaperUrlInput] = useState<string>("");
+  const [isChatWallpaperUploaded, setIsChatWallpaperUploaded] = useState<boolean>(false);
+  const chatWallpaperFileInputRef = useRef<HTMLInputElement>(null);
+
   const simulationAbortControllerRef = useRef<AbortController | null>(null);
 
   const audioCompletionPromises = useRef<Record<string, () => void>>({});
@@ -103,8 +109,8 @@ export default function ChatterSimPage() {
 
   const handleVideoPlaybackEnd = useCallback((messageId: string) => {
     setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, isVideoPlaying: false } : msg));
-    videoCompletionPromises.current[messageId]?.();
-    delete videoCompletionPromises.current[messageId];
+    videoCompletionPromises.current[videoMessageId]?.();
+    delete videoCompletionPromises.current[videoMessageId];
   }, []);
 
   const handleAvatarFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -127,6 +133,39 @@ export default function ChatterSimPage() {
 
   const isAvatarUploaded = friendAvatarUrl.startsWith("data:image");
 
+  const handleChatWallpaperUrlInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setChatWallpaperUrlInput(e.target.value);
+  };
+
+  const setChatWallpaperFromUrl = () => {
+    setChatWallpaperUrl(chatWallpaperUrlInput);
+    setIsChatWallpaperUploaded(false);
+    if (chatWallpaperFileInputRef.current) {
+      chatWallpaperFileInputRef.current.value = "";
+    }
+  };
+
+  const handleChatWallpaperFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setChatWallpaperUrl(reader.result as string);
+        setIsChatWallpaperUploaded(true);
+        setChatWallpaperUrlInput(""); 
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearChatWallpaper = () => {
+    setChatWallpaperUrl("");
+    setChatWallpaperUrlInput("");
+    setIsChatWallpaperUploaded(false);
+    if (chatWallpaperFileInputRef.current) {
+      chatWallpaperFileInputRef.current.value = "";
+    }
+  };
 
   const simulateChat = async (queue: MessageQueueItem[]) => {
     if (!queue || queue.length === 0) {
@@ -173,18 +212,16 @@ export default function ChatterSimPage() {
               }
 
               for (let charIndex = 0; charIndex < item.content.length; charIndex++) {
-                // stoppableDelay will throw if aborted, caught by outer try/catch of simulateChat
                 setCurrentTypingText(item.content.substring(0, charIndex + 1));
                 await stoppableDelay(TYPING_SPEED_MS, signal);
               }
             } finally {
               if (typingSoundActuallyPlayed) {
                 typingLoopSound.pause();
-                // Not resetting currentTime as a new Audio object is created each time
               }
             }
             
-            if (signal.aborted) return; // Check signal again after typing loop / potential abort
+            if (signal.aborted) return;
 
             setShowSendButton(true);
             await stoppableDelay(500, signal);
@@ -410,6 +447,16 @@ export default function ChatterSimPage() {
   } as React.CSSProperties;
 
 
+  const chatScreenStyle: React.CSSProperties = chatWallpaperUrl
+  ? {
+      backgroundImage: `url(${chatWallpaperUrl})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    }
+  : {};
+
+
   return (
     <div className="flex flex-col min-h-screen bg-slate-200 dark:bg-slate-900" style={dynamicStyles}>
       <AppHeader
@@ -427,8 +474,8 @@ export default function ChatterSimPage() {
           <div className="md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))] flex flex-col gap-4">
             <Card>
               <CardHeader>
-                <CardTitle>Customize Friend</CardTitle>
-                <CardDescription>Set name and avatar for your chat partner.</CardDescription>
+                <CardTitle>Customize Chat</CardTitle>
+                <CardDescription>Set name, avatar, and chat wallpaper.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
@@ -445,7 +492,7 @@ export default function ChatterSimPage() {
                   <Label htmlFor="friendAvatarUrl">Friend's Avatar</Label>
                   <div className="flex items-center gap-2">
                     {friendAvatarUrl ? (
-                        <Image src={friendAvatarUrl} alt="Friend Avatar Preview" width={40} height={40} className="rounded-full object-cover border" data-ai-hint="profile avatar"/>
+                        <NextImage src={friendAvatarUrl} alt="Friend Avatar Preview" width={40} height={40} className="rounded-full object-cover border" data-ai-hint="profile avatar"/>
                       ) : (
                         <UserCircle className="h-10 w-10 text-muted-foreground" />
                       )}
@@ -482,6 +529,45 @@ export default function ChatterSimPage() {
                     )}
                   </div>
                 </div>
+                <div className="space-y-2 border-t pt-4">
+                  <Label htmlFor="chatWallpaperUrlInput">Chat Wallpaper</Label>
+                  <div className="flex items-center gap-2">
+                     {chatWallpaperUrl && (
+                       <NextImage src={chatWallpaperUrl} alt="Wallpaper Preview" width={40} height={40} className="rounded object-cover border" data-ai-hint="wallpaper background" />
+                     )}
+                    <Input
+                      id="chatWallpaperUrlInput"
+                      value={isChatWallpaperUploaded ? "Using uploaded file" : chatWallpaperUrlInput}
+                      onChange={handleChatWallpaperUrlInputChange}
+                      placeholder="Enter wallpaper URL"
+                      className="mt-1 flex-grow"
+                      disabled={isChatWallpaperUploaded}
+                    />
+                    {!isChatWallpaperUploaded && (
+                        <Button variant="outline" size="sm" onClick={setChatWallpaperFromUrl} disabled={!chatWallpaperUrlInput}>Set URL</Button>
+                    )}
+                  </div>
+                  <div className="text-sm text-muted-foreground text-center my-1">OR</div>
+                   <div className="flex gap-2 items-center">
+                    <Label htmlFor="wallpaper-file-input" className={`w-full inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-4 py-2 ${isChatWallpaperUploaded ? 'bg-secondary/50 cursor-not-allowed' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer'}`}>
+                      <ImageIcon className="mr-2 h-4 w-4" /> Upload Wallpaper
+                    </Label>
+                    <Input
+                      id="wallpaper-file-input"
+                      ref={chatWallpaperFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleChatWallpaperFileChange}
+                      className="hidden"
+                      disabled={isChatWallpaperUploaded}
+                    />
+                     {chatWallpaperUrl && (
+                      <Button variant="outline" size="iconSm" onClick={clearChatWallpaper} aria-label="Clear chat wallpaper">
+                        <XCircleIcon className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -490,7 +576,10 @@ export default function ChatterSimPage() {
         )}
 
         <div className={`flex flex-col items-center justify-start ${isFullScreenChat ? 'w-full max-w-xl' : 'flex-grow md:w-2/3 lg:w-3/4'}`}>
-            <div className={`bg-background flex flex-col shadow-2xl overflow-hidden rounded-xl border-4 border-slate-700 dark:border-slate-600 ${isFullScreenChat ? `w-full ${fullScreenChatWindowHeight}` : `w-full max-w-sm ${chatWindowHeight} max-h-[750px]`}`}>
+            <div
+              className={`flex flex-col shadow-2xl overflow-hidden rounded-xl border-4 border-slate-700 dark:border-slate-600 ${isFullScreenChat ? `w-full ${fullScreenChatWindowHeight}` : `w-full max-w-sm ${chatWindowHeight} max-h-[750px]`} ${chatWallpaperUrl ? '' : 'bg-background'}`}
+              style={chatScreenStyle}
+            >
               <ChatHeader
                 name={friendName}
                 avatarUrl={friendAvatarUrl || undefined}
@@ -502,6 +591,7 @@ export default function ChatterSimPage() {
                 onAudioPlaybackEnd={handleAudioPlaybackEnd}
                 onVideoPlaybackEnd={handleVideoPlaybackEnd}
                 friendAvatarUrl={friendAvatarUrl}
+                hasCustomWallpaper={!!chatWallpaperUrl}
               />
               {(showKeypadInputArea || isRecordingAudio) && (
                 <KeypadArea
@@ -509,6 +599,7 @@ export default function ChatterSimPage() {
                   isRecordingAudio={isRecordingAudio}
                   typedText={currentTypingText}
                   showSendButton={showSendButton}
+                  hasCustomWallpaper={!!chatWallpaperUrl}
                 />
               )}
             </div>
@@ -517,6 +608,4 @@ export default function ChatterSimPage() {
     </div>
   );
 }
-    
-
     
