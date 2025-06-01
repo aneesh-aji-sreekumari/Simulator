@@ -9,7 +9,7 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
 import AppHeader from "@/components/layout/AppHeader";
-import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Play, Pause, Music2 } from "lucide-react";
+import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Play, Pause, Music2, Maximize, Minimize } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import { Slider } from "@/components/ui/slider";
 const TYPING_SPEED_MS = 80;
 const FRIEND_TYPING_INDICATOR_DURATION_MS = 1500;
 const READING_WORDS_PER_MINUTE = 200;
+const BG_MUSIC_PAUSE_DELAY_MS = 200; // Delay for BG music to pause before friend's media
 
 const stoppableDelay = (ms: number, signal: AbortSignal) => {
   return new Promise<void>((resolve, reject) => {
@@ -142,7 +143,7 @@ export default function ChatterSimPage() {
     const newUrl = e.target.value;
     setBgMusicUrlInput(newUrl);
     if (bgMusicIsUploaded) {
-        setBgMusicIsUploaded(false); // User is typing a URL, so it's no longer "uploaded" mode
+        setBgMusicIsUploaded(false); 
     }
     if (!newUrl && !bgMusicIsUploaded) {
         setBgMusicSrc('');
@@ -151,11 +152,10 @@ export default function ChatterSimPage() {
   };
 
   const handleSetCurrentUrlAsBackgroundMusic = () => {
-    if (bgMusicUrlInput && !bgMusicIsUploaded) { // Only set if it's a URL and not a filename display
+    if (bgMusicUrlInput && !bgMusicIsUploaded) { 
         setBgMusicSrc(bgMusicUrlInput);
-        // setBgMusicIsUploaded(false); // Already handled or implied
         if (bgMusicFileInputRef.current) bgMusicFileInputRef.current.value = "";
-    } else if (!bgMusicUrlInput) { // If input is empty, clear music
+    } else if (!bgMusicUrlInput) { 
         clearBgMusic();
     }
   };
@@ -167,7 +167,7 @@ export default function ChatterSimPage() {
       reader.onloadend = () => {
         setBgMusicSrc(reader.result as string);
         setBgMusicIsUploaded(true);
-        setBgMusicUrlInput(file.name); // Display filename in input
+        setBgMusicUrlInput(file.name); 
       };
       reader.readAsDataURL(file);
     }
@@ -223,7 +223,7 @@ export default function ChatterSimPage() {
     const signal = simulationAbortControllerRef.current.signal;
 
     setIsSimulating(true);
-    if (bgMusicSrc) {
+    if (bgMusicSrc) { // Start BG music if loaded
       setIsBgMusicPlaying(true);
     }
     setShowKeypadInputArea(false);
@@ -340,13 +340,26 @@ export default function ChatterSimPage() {
           }
           setShowKeypadInputArea(false);
 
-        } else { 
+        } else { // Friend's message
           setShowKeypadInputArea(false);
           setShowFriendTypingIndicator(true);
           playSound(SOUND_FRIEND_TYPING);
           await stoppableDelay(FRIEND_TYPING_INDICATOR_DURATION_MS, signal);
           if (signal.aborted) return;
           setShowFriendTypingIndicator(false);
+
+          let bgMusicPausedByThisMessage = false;
+          if ((item.type === "audio" || item.type === "video") && item.content && isBgMusicPlaying) {
+              bgMusicPausedByThisMessage = true;
+              setIsBgMusicPlaying(false); // Request pause
+              try {
+                  await stoppableDelay(BG_MUSIC_PAUSE_DELAY_MS, signal); // Allow time for pause to take effect
+              } catch (e) {
+                  // If aborted during this small delay, the main abort handling will ensure bgMusic is off.
+                  if (!(e instanceof DOMException && e.name === 'AbortError')) throw e;
+              }
+              if (signal.aborted) return; // Check again if aborted during the small delay
+          }
 
           if (item.type === "text") {
             addMessage({ sender: "friend", type: "text", content: item.content });
@@ -370,19 +383,21 @@ export default function ChatterSimPage() {
                 audioDuration: item.audioDuration
               });
               playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
-              await new Promise<void>((resolve, reject) => {
-                 if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
-                 const onAbort = () => {
-                    const audioToStop = document.getElementById(`audio-${audioMessageId}`) as HTMLAudioElement;
-                    if(audioToStop) audioToStop.pause();
-                    reject(new DOMException("Aborted", "AbortError"));
-                 };
-                 signal.addEventListener('abort', onAbort, { once: true });
-                 audioCompletionPromises.current[audioMessageId] = () => {
-                    signal.removeEventListener('abort', onAbort);
-                    resolve();
-                 };
-              });
+              try {
+                await new Promise<void>((resolve, reject) => {
+                   if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
+                   const onAbort = () => {
+                      const audioToStop = document.getElementById(`audio-${audioMessageId}`) as HTMLAudioElement;
+                      if(audioToStop) audioToStop.pause();
+                      reject(new DOMException("Aborted", "AbortError"));
+                   };
+                   signal.addEventListener('abort', onAbort, { once: true });
+                   audioCompletionPromises.current[audioMessageId] = () => {
+                      signal.removeEventListener('abort', onAbort);
+                      resolve();
+                   };
+                });
+              } catch (e) { if (!(e instanceof DOMException && e.name === 'AbortError')) throw e; /* Absorb AbortError if media playback was cut short */ }
             }
           } else if (item.type === "video") {
             if (!item.content) {
@@ -399,24 +414,30 @@ export default function ChatterSimPage() {
                 videoDuration: item.videoDuration
               });
               playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
-              await new Promise<void>((resolve, reject) => {
-                 if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
-                 const onAbort = () => {
-                    const videoToStop = document.getElementById(`video-${videoMessageId}`) as HTMLVideoElement;
-                    if(videoToStop) videoToStop.pause();
-                    reject(new DOMException("Aborted", "AbortError"));
-                 };
-                 signal.addEventListener('abort', onAbort, { once: true });
-                 videoCompletionPromises.current[videoMessageId] = () => {
-                    signal.removeEventListener('abort', onAbort);
-                    resolve();
-                 };
-              });
+              try {
+                await new Promise<void>((resolve, reject) => {
+                   if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
+                   const onAbort = () => {
+                      const videoToStop = document.getElementById(`video-${videoMessageId}`) as HTMLVideoElement;
+                      if(videoToStop) videoToStop.pause();
+                      reject(new DOMException("Aborted", "AbortError"));
+                   };
+                   signal.addEventListener('abort', onAbort, { once: true });
+                   videoCompletionPromises.current[videoMessageId] = () => {
+                      signal.removeEventListener('abort', onAbort);
+                      resolve();
+                   };
+                });
+              } catch (e) { if (!(e instanceof DOMException && e.name === 'AbortError')) throw e; /* Absorb AbortError */ }
             }
           } else if (item.type === "image" || item.type === "gif" || item.type === "sticker") {
              addMessage({ sender: "friend", type: item.type, content: item.content });
              playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
              await stoppableDelay(1500, signal);
+          }
+          
+          if (bgMusicPausedByThisMessage && !signal.aborted) {
+            setIsBgMusicPlaying(true); // Request resume BG music
           }
         }
         if (signal.aborted) return;
@@ -431,7 +452,7 @@ export default function ChatterSimPage() {
     } finally {
       setIsSimulating(false);
       setShowKeypadInputArea(false);
-      setIsBgMusicPlaying(false);
+      setIsBgMusicPlaying(false); // Always stop BG music when simulation ends/aborts
       simulationAbortControllerRef.current = null;
     }
   };
@@ -444,7 +465,7 @@ export default function ChatterSimPage() {
     if (simulationAbortControllerRef.current) {
       simulationAbortControllerRef.current.abort();
     }
-    setIsBgMusicPlaying(false);
+    setIsBgMusicPlaying(false); // Explicitly stop bg music on manual stop
   };
 
   const handleResetSimulation = () => {
@@ -458,7 +479,7 @@ export default function ChatterSimPage() {
     setShowKeypadInputArea(false);
     setShowSendButton(false);
     setIsSimulating(false);
-    setIsBgMusicPlaying(false);
+    setIsBgMusicPlaying(false); // Explicitly stop bg music on reset
   };
 
 
@@ -549,7 +570,6 @@ export default function ChatterSimPage() {
               </CardContent>
             </Card>
 
-            {/* Background Music Card */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center"><Music2 className="mr-2 h-5 w-5" /> Background Music</CardTitle>
