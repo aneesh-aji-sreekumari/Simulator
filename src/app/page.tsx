@@ -9,13 +9,15 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
 import AppHeader from "@/components/layout/AppHeader";
-import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Image as ImageIcon, Moon, Sun, Music2, Play, Pause } from "lucide-react";
+import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Image as ImageIcon, Moon, Sun } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import NextImage from "next/image";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 
 const TYPING_SPEED_MS = 80;
@@ -43,6 +45,9 @@ const SOUND_FRIEND_TYPING = "/sounds/friend_typing.mp3";
 const SOUND_MY_AUDIO_RECORD_START = "/sounds/my_audio_record_start.mp3";
 const SOUND_MY_AUDIO_SENT = "/sounds/my_audio_sent.mp3";
 const SOUND_MY_TYPING = "/sounds/my_typing.mp3";
+
+const MAX_CHAT_WIDTH_PX = 384; // Corresponds to max-w-sm Tailwind class
+const MAX_CHAT_HEIGHT_PX = 750; // Corresponds to max-h-[750px] Tailwind class
 
 
 export default function ChatterSimPage() {
@@ -74,6 +79,11 @@ export default function ChatterSimPage() {
   const [currentTheme, setCurrentTheme] = useState<string | undefined>(undefined);
   const [soundEffectsVolume, setSoundEffectsVolume] = useState<number>(1);
 
+  const [chatAspectRatio, setChatAspectRatio] = useState<string>("free");
+  const [customRatioWidth, setCustomRatioWidth] = useState<number>(9);
+  const [customRatioHeight, setCustomRatioHeight] = useState<number>(16);
+  const [appliedChatDimensions, setAppliedChatDimensions] = useState<{ width: string; height: string } | null>(null);
+
 
   useEffect(() => {
     const storedTheme = localStorage.getItem('theme');
@@ -93,6 +103,58 @@ export default function ChatterSimPage() {
       localStorage.setItem('theme', 'light');
     }
   }, [currentTheme]);
+
+  useEffect(() => {
+    if (isFullScreenChat || chatAspectRatio === "free") {
+      setAppliedChatDimensions(null);
+      return;
+    }
+  
+    let ratioW: number;
+    let ratioH: number;
+  
+    if (chatAspectRatio === "custom") {
+      if (customRatioWidth > 0 && customRatioHeight > 0) {
+        ratioW = customRatioWidth;
+        ratioH = customRatioHeight;
+      } else {
+        setAppliedChatDimensions(null); 
+        return;
+      }
+    } else {
+      const parts = chatAspectRatio.split(':').map(Number);
+      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) && parts[0] > 0 && parts[1] > 0) {
+        [ratioW, ratioH] = parts;
+      } else {
+        setAppliedChatDimensions(null); 
+        return;
+      }
+    }
+  
+    const containerWidth = MAX_CHAT_WIDTH_PX;
+    const containerHeight = MAX_CHAT_HEIGHT_PX;
+    const targetAspectRatioValue = ratioW / ratioH;
+    const containerAspectRatioValue = containerWidth / containerHeight;
+  
+    let finalWidth: number;
+    let finalHeight: number;
+  
+    if (targetAspectRatioValue >= containerAspectRatioValue) {
+      // Target is wider or same aspect as container, so width is the limiting dimension
+      finalWidth = containerWidth;
+      finalHeight = finalWidth / targetAspectRatioValue;
+    } else {
+      // Target is taller than container, so height is the limiting dimension
+      finalHeight = containerHeight;
+      finalWidth = finalHeight * targetAspectRatioValue;
+    }
+  
+    setAppliedChatDimensions({
+      width: `${Math.round(finalWidth)}px`,
+      height: `${Math.round(finalHeight)}px`,
+    });
+  
+  }, [chatAspectRatio, customRatioWidth, customRatioHeight, isFullScreenChat]);
 
   const handleThemeToggle = () => {
     setCurrentTheme(prev => (prev === 'light' ? 'dark' : 'light'));
@@ -481,6 +543,15 @@ export default function ChatterSimPage() {
     "--app-main-padding-y": appMainPaddingY,
   } as React.CSSProperties;
 
+  const chatScreenClasses = cn(
+    "flex flex-col overflow-hidden bg-background transition-all duration-300 ease-in-out",
+    isFullScreenChat
+      ? `w-full ${chatAreaHeightFullScreen}`
+      : appliedChatDimensions
+        ? `shadow-2xl rounded-xl border-4 border-slate-700 dark:border-slate-600`
+        : `w-full max-w-sm ${chatAreaHeightNonFullScreen} max-h-[750px] shadow-2xl rounded-xl border-4 border-slate-700 dark:border-slate-600`
+  );
+
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-200 dark:bg-slate-900" style={dynamicStyles}>
@@ -502,7 +573,7 @@ export default function ChatterSimPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Customize Chat</CardTitle>
-                <CardDescription>Set name, avatar, wallpaper, and sound volume.</CardDescription>
+                <CardDescription>Set name, avatar, wallpaper, volume, and UI aspect ratio.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
@@ -607,6 +678,48 @@ export default function ChatterSimPage() {
                     aria-label="Sound effects volume"
                   />
                 </div>
+                <div className="space-y-1 border-t pt-4">
+                  <Label htmlFor="chatAspectRatio">Chat UI Aspect Ratio</Label>
+                  <Select value={chatAspectRatio} onValueChange={setChatAspectRatio}>
+                    <SelectTrigger id="chatAspectRatio" className="mt-1">
+                      <SelectValue placeholder="Select aspect ratio" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="free">Freeform (Default)</SelectItem>
+                      <SelectItem value="9:16">9:16 (Portrait)</SelectItem>
+                      <SelectItem value="16:9">16:9 (Landscape)</SelectItem>
+                      <SelectItem value="1:1">1:1 (Square)</SelectItem>
+                      <SelectItem value="4:3">4:3 (Classic)</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {chatAspectRatio === "custom" && (
+                    <div className="grid grid-cols-2 gap-2 pt-2">
+                      <div>
+                        <Label htmlFor="customRatioWidth">Ratio Width</Label>
+                        <Input
+                          id="customRatioWidth"
+                          type="number"
+                          value={customRatioWidth}
+                          onChange={(e) => setCustomRatioWidth(Math.max(1, parseInt(e.target.value,10) || 1))}
+                          min="1"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="customRatioHeight">Ratio Height</Label>
+                        <Input
+                          id="customRatioHeight"
+                          type="number"
+                          value={customRatioHeight}
+                          onChange={(e) => setCustomRatioHeight(Math.max(1, parseInt(e.target.value,10) || 1))}
+                          min="1"
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -616,13 +729,8 @@ export default function ChatterSimPage() {
 
         <div className={`flex flex-col items-center justify-start ${isFullScreenChat ? 'w-full h-full' : 'flex-grow md:w-2/3 lg:w-3/4'}`}>
             <div
-              className={`
-                flex flex-col overflow-hidden bg-background
-                ${isFullScreenChat
-                  ? `w-full ${chatAreaHeightFullScreen}`
-                  : `w-full max-w-sm ${chatAreaHeightNonFullScreen} max-h-[750px] shadow-2xl rounded-xl border-4 border-slate-700 dark:border-slate-600`
-                }
-              `}
+              className={chatScreenClasses}
+              style={(!isFullScreenChat && appliedChatDimensions) ? appliedChatDimensions : undefined}
             >
               <ChatHeader
                 name={friendName}
@@ -649,3 +757,4 @@ export default function ChatterSimPage() {
     </div>
   );
 }
+
