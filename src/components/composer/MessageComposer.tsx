@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { XCircle, Edit3, Trash2, PlusCircle, FileUp, FileSpreadsheet, MoreVertical } from "lucide-react";
+import { XCircle, Edit3, Trash2, PlusCircle, FileUp, FileSpreadsheet } from "lucide-react";
 import NextImage from "next/image";
 import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
@@ -21,8 +21,13 @@ import {
   DialogTitle,
   DialogFooter,
   DialogClose,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 interface MessageComposerProps {
   queue: MessageQueueItem[];
@@ -237,6 +242,7 @@ export default function MessageComposer({ queue, setQueue }: MessageComposerProp
           if (type === 'video' && videoDuration !== undefined && (isNaN(videoDuration) || videoDuration < 0)) { errors.push(`Row ${index + 2}: Invalid 'videoDuration'.`); rowIsValid = false; }
           if (type !== 'text' && !content.match(/^(data:|https?:\/\/)/i) && !(type === 'audio' && audioDuration && !content) && !(type === 'video' && videoDuration && !content) ) { errors.push(`Row ${index + 2}: Content for media type '${type}' must be a URL/Data URI.`); rowIsValid = false; }
 
+
           if (rowIsValid) {
             newQueue.push({
               id: Date.now().toString() + Math.random().toString(36).substring(2, 7) + index,
@@ -273,6 +279,25 @@ export default function MessageComposer({ queue, setQueue }: MessageComposerProp
 
   const isMediaUploaded = formData.content.startsWith("data:");
 
+  const getItemSummary = (item: MessageQueueItem) => {
+    let summary = `[${item.sender === 'me' ? 'Me' : 'Friend'}] ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}: `;
+    if (item.type === 'text') {
+      summary += `"${item.content.substring(0, 30)}${item.content.length > 30 ? '...' : ''}"`;
+    } else if (item.content.startsWith("data:")) {
+      summary += `[Uploaded ${item.type}]`;
+    } else if (item.content) {
+      summary += `[${item.type} URL]`;
+    } else if (item.type === 'audio' && item.audioDuration) {
+      summary += `[Audio - ${item.audioDuration}ms]`;
+    } else if (item.type === 'video' && item.videoDuration) {
+      summary += `[Video - ${item.videoDuration}ms]`;
+    } else {
+      summary += `[${item.type}]`;
+    }
+    summary += ` (Delay: ${item.delayAfter}ms)`;
+    return summary;
+  };
+
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <Card className="w-full h-full flex flex-col">
@@ -301,41 +326,33 @@ export default function MessageComposer({ queue, setQueue }: MessageComposerProp
               <p className="text-muted-foreground text-center py-4">The message queue is empty.</p>
             ) : (
               <ScrollArea className="flex-grow border rounded-md">
-                <div className="p-2 space-y-3">
+                <Accordion type="multiple" className="w-full p-1">
                   {queue.map((item) => (
-                    <Card key={item.id} className="p-3 bg-card/50 w-full">
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="flex-1 min-w-0 overflow-hidden">
-                          <p className="text-sm font-medium flex flex-wrap gap-1 items-center whitespace-normal break-words">
-                            <span className={`capitalize px-2 py-0.5 rounded-full text-xs ${item.sender === 'me' ? 'bg-accent text-accent-foreground' : 'bg-primary text-primary-foreground'}`}>
-                              {item.sender}
-                            </span>
-                            <span className="capitalize text-muted-foreground">({item.type})</span>
-                          </p>
-                          <p
-                            className="text-sm mt-1 whitespace-normal break-words"
-                            title={item.content.startsWith("data:") ? `[Uploaded ${item.type}]` : item.content}
-                          >
-                            {item.content.startsWith("data:") ? `[Uploaded ${item.type}]` : (item.content.length > 100 ? item.content.substring(0, 97) + "..." : item.content) }
-                          </p>
-                          <div className="text-xs text-muted-foreground mt-1 whitespace-normal break-words">
-                            <span>Delay: {item.delayAfter}ms</span>
-                            {item.type === 'audio' && typeof item.audioDuration === 'number' && <span> / Duration: {item.audioDuration}ms</span>}
-                            {item.type === 'video' && typeof item.videoDuration === 'number' && <span> / Duration: {item.videoDuration}ms</span>}
-                          </div>
+                    <AccordionItem value={item.id} key={item.id} className="border-b">
+                      <AccordionTrigger className="hover:no-underline text-sm p-3 w-full text-left">
+                        <span className="whitespace-normal break-words w-full pr-2">{getItemSummary(item)}</span>
+                      </AccordionTrigger>
+                      <AccordionContent className="p-3 space-y-3">
+                        <div className="space-y-1 text-sm">
+                          <p><span className="font-semibold">Sender:</span> <span className={`capitalize px-1.5 py-0.5 rounded-full text-xs ${item.sender === 'me' ? 'bg-accent text-accent-foreground' : 'bg-primary text-primary-foreground'}`}>{item.sender}</span></p>
+                          <p><span className="font-semibold">Type:</span> <span className="capitalize">{item.type}</span></p>
+                          <p className="whitespace-normal break-words"><span className="font-semibold">Content:</span> {item.content.startsWith("data:") ? `[Uploaded ${item.type}]` : item.content}</p>
+                          <p><span className="font-semibold">Delay After:</span> {item.delayAfter}ms</p>
+                          {item.type === 'audio' && typeof item.audioDuration === 'number' && <p><span className="font-semibold">Audio Duration:</span> {item.audioDuration}ms</p>}
+                          {item.type === 'video' && typeof item.videoDuration === 'number' && <p><span className="font-semibold">Video Duration:</span> {item.videoDuration}ms</p>}
                         </div>
-                        <div className="flex flex-col gap-1 flex-shrink-0">
-                           <Button variant="outline" size="iconSm" onClick={() => handleEditClick(item)} aria-label="Edit message">
-                              <Edit3 size={14} />
+                        <div className="flex gap-2 mt-2">
+                           <Button variant="outline" size="sm" onClick={() => handleEditClick(item)} aria-label="Edit message">
+                              <Edit3 className="mr-1.5 h-3.5 w-3.5" /> Edit
                            </Button>
-                           <Button variant="destructive" size="iconSm" onClick={() => handleDelete(item.id)} aria-label="Delete message">
-                              <Trash2 size={14} />
+                           <Button variant="destructive" size="sm" onClick={() => handleDelete(item.id)} aria-label="Delete message">
+                              <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete
                            </Button>
                         </div>
-                      </div>
-                    </Card>
+                      </AccordionContent>
+                    </AccordionItem>
                   ))}
-                </div>
+                </Accordion>
               </ScrollArea>
             )}
           </div>
@@ -411,3 +428,4 @@ export default function MessageComposer({ queue, setQueue }: MessageComposerProp
   );
 }
 
+    
