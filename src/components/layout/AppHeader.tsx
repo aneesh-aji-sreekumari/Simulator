@@ -3,6 +3,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Maximize, Minimize, PlayCircle, StopCircle, RefreshCw, Moon, Sun } from "lucide-react";
+import { useState, useEffect } from "react";
 
 interface AppHeaderProps {
   isFullScreenChat: boolean;
@@ -27,6 +28,12 @@ export default function AppHeader({
   currentTheme,
   onToggleTheme,
 }: AppHeaderProps) {
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
   return (
     <header className="bg-primary text-primary-foreground p-3 shadow-md flex items-center justify-between sticky top-0 z-40">
       <h1 className="text-xl font-semibold">ChatterSim</h1>
@@ -76,7 +83,7 @@ export default function AppHeader({
           className="hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-primary-foreground/50"
           title={currentTheme === 'light' ? "Switch to Dark Mode" : "Switch to Light Mode"}
         >
-          {currentTheme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+          {hasMounted ? (currentTheme === 'light' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />) : <div className="h-5 w-5" /> } {/* Placeholder or null during SSR/initial mount */}
         </Button>
 
         <Button
