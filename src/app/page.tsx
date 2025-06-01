@@ -9,11 +9,13 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
 import AppHeader from "@/components/layout/AppHeader";
-import { UserCircle, FileUp, XCircle } from "lucide-react";
+import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Play, Pause, Music2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import { Slider } from "@/components/ui/slider";
 
 
 const TYPING_SPEED_MS = 80;
@@ -63,6 +65,16 @@ export default function ChatterSimPage() {
   const videoCompletionPromises = useRef<Record<string, () => void>>({});
 
   const [isFullScreenChat, setIsFullScreenChat] = useState(false);
+
+  // Background Music State
+  const [bgMusicSrc, setBgMusicSrc] = useState<string>('');
+  const [bgMusicUrlInput, setBgMusicUrlInput] = useState<string>('');
+  const [bgMusicVolume, setBgMusicVolume] = useState<number>(0.2); // Default to 20% volume
+  const [isBgMusicPlaying, setIsBgMusicPlaying] = useState<boolean>(false);
+  const [bgMusicIsUploaded, setBgMusicIsUploaded] = useState<boolean>(false);
+  const bgAudioRef = useRef<HTMLAudioElement>(null);
+  const bgMusicFileInputRef = useRef<HTMLInputElement>(null);
+
 
   const toggleFullScreenChat = useCallback(() => {
     setIsFullScreenChat(prev => !prev);
@@ -123,6 +135,82 @@ export default function ChatterSimPage() {
   };
 
   const isAvatarUploaded = friendAvatarUrl.startsWith("data:image");
+
+
+  // Background Music Handlers
+  const handleBgMusicUrlInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const newUrl = e.target.value;
+    setBgMusicUrlInput(newUrl);
+    if (bgMusicIsUploaded) {
+        setBgMusicIsUploaded(false); // User is typing a URL, so it's no longer "uploaded" mode
+    }
+    if (!newUrl && !bgMusicIsUploaded) {
+        setBgMusicSrc('');
+        setIsBgMusicPlaying(false);
+    }
+  };
+
+  const handleSetCurrentUrlAsBackgroundMusic = () => {
+    if (bgMusicUrlInput && !bgMusicIsUploaded) { // Only set if it's a URL and not a filename display
+        setBgMusicSrc(bgMusicUrlInput);
+        // setBgMusicIsUploaded(false); // Already handled or implied
+        if (bgMusicFileInputRef.current) bgMusicFileInputRef.current.value = "";
+    } else if (!bgMusicUrlInput) { // If input is empty, clear music
+        clearBgMusic();
+    }
+  };
+  
+  const handleBgMusicFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBgMusicSrc(reader.result as string);
+        setBgMusicIsUploaded(true);
+        setBgMusicUrlInput(file.name); // Display filename in input
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearBgMusic = () => {
+    setBgMusicSrc('');
+    setBgMusicUrlInput('');
+    setBgMusicIsUploaded(false);
+    setIsBgMusicPlaying(false);
+    if (bgMusicFileInputRef.current) {
+      bgMusicFileInputRef.current.value = "";
+    }
+  };
+
+  const toggleBgMusicPlayPause = () => {
+    if (bgMusicSrc) {
+      setIsBgMusicPlaying(prev => !prev);
+    }
+  };
+
+  const handleBgMusicVolumeChange = (value: number[]) => {
+    setBgMusicVolume(value[0] / 100);
+  };
+
+  // useEffects for Background Music
+  useEffect(() => {
+    const audio = bgAudioRef.current;
+    if (audio) {
+      if (isBgMusicPlaying && bgMusicSrc) {
+        audio.play().catch(error => console.warn("BG Music play error:", error));
+      } else {
+        audio.pause();
+      }
+    }
+  }, [isBgMusicPlaying, bgMusicSrc]);
+
+  useEffect(() => {
+    const audio = bgAudioRef.current;
+    if (audio) {
+      audio.volume = bgMusicVolume;
+    }
+  }, [bgMusicVolume]);
 
 
   const simulateChat = async (queue: MessageQueueItem[]) => {
@@ -204,7 +292,7 @@ export default function ChatterSimPage() {
                 audio.onerror = (e) => {
                   console.error("Error during recording sim audio playback:", e);
                   signal.removeEventListener('abort', onAbort);
-                  resolve(); // Resolve on error to continue simulation
+                  resolve(); 
                 };
                 audio.load();
               });
@@ -352,7 +440,6 @@ export default function ChatterSimPage() {
     if (simulationAbortControllerRef.current) {
       simulationAbortControllerRef.current.abort();
     }
-    // setIsSimulating will be set to false in simulateChat's finally block or abort handler
   };
 
   const handleResetSimulation = () => {
@@ -373,12 +460,11 @@ export default function ChatterSimPage() {
   const fullScreenChatWindowHeight = "h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))]";
   
   const appHeaderHeight = "60px"; 
-  const appMainPaddingY = "32px"; // Sum of p-4 top and p-4 bottom for main element
+  const appMainPaddingY = "32px"; 
 
   const dynamicStyles = {
     "--app-header-height": appHeaderHeight,
     "--app-main-padding-y": appMainPaddingY,
-    // --chat-footer-height is no longer needed here as the button moved
   } as React.CSSProperties;
 
 
@@ -436,7 +522,7 @@ export default function ChatterSimPage() {
                   <div className="text-sm text-muted-foreground text-center my-1">OR</div>
                   <div className="flex gap-2 items-center">
                     <Label htmlFor="avatar-file-input" className={`w-full inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-4 py-2 ${isAvatarUploaded ? 'bg-secondary/50 cursor-not-allowed' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer'}`}>
-                      <FileUp className="mr-2 h-4 w-4" /> Upload Avatar
+                      <FileUpIcon className="mr-2 h-4 w-4" /> Upload Avatar
                     </Label>
                     <Input
                       id="avatar-file-input"
@@ -449,13 +535,95 @@ export default function ChatterSimPage() {
                     />
                      {isAvatarUploaded && (
                       <Button variant="outline" size="iconSm" onClick={clearUploadedAvatar} aria-label="Clear uploaded avatar">
-                        <XCircle className="h-4 w-4" />
+                        <XCircleIcon className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
                 </div>
               </CardContent>
             </Card>
+
+            {/* Background Music Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center"><Music2 className="mr-2 h-5 w-5" /> Background Music</CardTitle>
+                <CardDescription>Add music to play during the simulation.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-1">
+                  <Label htmlFor="bgMusicUrlInput">Music URL or Uploaded File Name</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="bgMusicUrlInput"
+                      value={bgMusicUrlInput}
+                      onChange={handleBgMusicUrlInputChange}
+                      placeholder="Enter music URL or see file name"
+                      className="flex-grow"
+                      disabled={bgMusicIsUploaded && !!bgMusicSrc} 
+                    />
+                    {bgMusicUrlInput && !bgMusicIsUploaded && (
+                        <Button onClick={handleSetCurrentUrlAsBackgroundMusic} size="sm" variant="outline" className="flex-shrink-0">Set URL</Button>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="text-sm text-muted-foreground text-center my-1">OR</div>
+                
+                <div className="flex items-center gap-2">
+                    <Label 
+                        htmlFor="bg-music-file-input" 
+                        className={`w-full inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-4 py-2 ${!!bgMusicUrlInput && !bgMusicIsUploaded ? 'bg-secondary/50 cursor-not-allowed' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer'}`}
+                    >
+                        <FileUpIcon className="mr-2 h-4 w-4" /> Upload Music File
+                    </Label>
+                    <Input
+                        id="bg-music-file-input"
+                        ref={bgMusicFileInputRef}
+                        type="file"
+                        accept="audio/*"
+                        onChange={handleBgMusicFileChange}
+                        className="hidden"
+                        disabled={!!bgMusicUrlInput && !bgMusicIsUploaded}
+                    />
+                    {bgMusicSrc && (
+                        <Button variant="outline" size="iconSm" onClick={clearBgMusic} aria-label="Clear background music" className="flex-shrink-0">
+                            <XCircleIcon className="h-4 w-4" />
+                        </Button>
+                    )}
+                </div>
+
+                {bgMusicSrc && (
+                  <>
+                    <div>
+                      <Label htmlFor="bgMusicVolume">Volume</Label>
+                      <Slider
+                        id="bgMusicVolume"
+                        defaultValue={[bgMusicVolume * 100]}
+                        max={100}
+                        step={1}
+                        onValueChange={handleBgMusicVolumeChange}
+                        className="mt-1"
+                      />
+                    </div>
+                    <Button onClick={toggleBgMusicPlayPause} variant="outline" className="w-full">
+                      {isBgMusicPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
+                      {isBgMusicPlaying ? "Pause Music" : "Play Music"}
+                    </Button>
+                  </>
+                )}
+                <audio 
+                    ref={bgAudioRef} 
+                    src={bgMusicSrc} 
+                    loop 
+                    onCanPlay={() => { 
+                        if (isBgMusicPlaying && bgAudioRef.current && bgAudioRef.current.paused) {
+                             bgAudioRef.current.play().catch(e => console.warn("Autoplay onCanPlay failed:", e));
+                        }
+                    }}
+                />
+              </CardContent>
+            </Card>
+
             <MessageComposer queue={customMessageQueue} setQueue={setCustomMessageQueue} />
           </div>
         )}
@@ -482,10 +650,10 @@ export default function ChatterSimPage() {
                   showSendButton={showSendButton}
                 />
               )}
-              {/* Simulate Chat Button is now removed from here and moved to AppHeader */}
             </div>
         </div>
       </main>
     </div>
   );
 }
+
