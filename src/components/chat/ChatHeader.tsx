@@ -1,13 +1,16 @@
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MoreVertical, UserCircle } from "lucide-react";
+import { MoreVertical, UserCircle, Maximize, Minimize } from "lucide-react";
 
 interface ChatHeaderProps {
   name: string;
   avatarUrl?: string;
   isOnline: boolean;
+  isFullScreen: boolean;
+  onToggleFullScreen: () => void;
 }
 
-export default function ChatHeader({ name, avatarUrl, isOnline }: ChatHeaderProps) {
+export default function ChatHeader({ name, avatarUrl, isOnline, isFullScreen, onToggleFullScreen }: ChatHeaderProps) {
   return (
     <header className="bg-primary text-primary-foreground p-3 flex items-center justify-between shadow-sm">
       <div className="flex items-center gap-3">
@@ -22,9 +25,22 @@ export default function ChatHeader({ name, avatarUrl, isOnline }: ChatHeaderProp
           {isOnline && <p className="text-xs text-primary-foreground/90">Online</p>}
         </div>
       </div>
-      <button aria-label="More options">
-        <MoreVertical className="text-primary-foreground" />
-      </button>
+      <div className="flex items-center gap-1 sm:gap-2">
+        <button 
+          onClick={onToggleFullScreen} 
+          aria-label={isFullScreen ? "Exit full screen" : "Enter full screen"}
+          className="p-1 rounded-full hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-primary-foreground/50"
+        >
+          {isFullScreen ? <Minimize size={20} className="text-primary-foreground" /> : <Maximize size={20} className="text-primary-foreground" />}
+        </button>
+        <button 
+          aria-label="More options"
+          className="p-1 rounded-full hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-primary-foreground/50"
+        >
+          <MoreVertical size={20} className="text-primary-foreground" />
+        </button>
+      </div>
     </header>
   );
 }
+

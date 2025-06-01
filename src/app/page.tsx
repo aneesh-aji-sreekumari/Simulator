@@ -9,7 +9,7 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
 import { Button } from "@/components/ui/button";
-import { PlayCircle, UserCircle, FileUp, XCircle, MoreVertical, Edit2, Trash2, FileSpreadsheet } from "lucide-react";
+import { PlayCircle, UserCircle, FileUp, XCircle, MoreVertical, Edit2, Trash2, FileSpreadsheet, Maximize, Minimize } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import * as XLSX from 'xlsx';
 import { useToast } from "@/hooks/use-toast";
 import { PlusCircle } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
 
 const TYPING_SPEED_MS = 80;
@@ -38,7 +40,6 @@ const READING_WORDS_PER_MINUTE = 200;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Sound effect file paths (assuming they are in public/sounds/)
 const SOUND_MY_MESSAGE_SENT = "/sounds/my_message_sent.mp3";
 const SOUND_FRIEND_MESSAGE_RECEIVED = "/sounds/friend_message_received.mp3";
 const SOUND_FRIEND_TYPING = "/sounds/friend_typing.mp3";
@@ -56,7 +57,7 @@ export default function ChatterSimPage() {
   const [showKeypadInputArea, setShowKeypadInputArea] = useState(false);
   const [showSendButton, setShowSendButton] = useState(false);
   const [customMessageQueue, setCustomMessageQueue] = useState<MessageQueueItem[]>(() => {
-    return JSON.parse(JSON.stringify(defaultMessageQueue)); // Deep copy
+    return JSON.parse(JSON.stringify(defaultMessageQueue));
   });
 
   const [friendName, setFriendName] = useState<string>("Alice");
@@ -65,6 +66,12 @@ export default function ChatterSimPage() {
 
   const audioCompletionPromises = useRef<Record<string, () => void>>({});
   const videoCompletionPromises = useRef<Record<string, () => void>>({});
+
+  const [isFullScreenChat, setIsFullScreenChat] = useState(false);
+
+  const toggleFullScreenChat = useCallback(() => {
+    setIsFullScreenChat(prev => !prev);
+  }, []);
 
   const playSound = (soundUrl: string) => {
     try {
@@ -227,7 +234,7 @@ export default function ChatterSimPage() {
         }
         setShowKeypadInputArea(false);
 
-      } else { // sender is "friend"
+      } else { 
         setShowKeypadInputArea(false);
         setShowFriendTypingIndicator(true);
         playSound(SOUND_FRIEND_TYPING);
@@ -293,8 +300,15 @@ export default function ChatterSimPage() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-slate-200 dark:bg-slate-900 p-4 gap-4">
-      <div className="md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-2rem)] flex flex-col gap-4">
+    <div className={`flex min-h-screen bg-slate-200 dark:bg-slate-900 
+      ${isFullScreenChat 
+        ? 'p-0 md:p-1 justify-center items-center' 
+        : 'p-4 flex-col md:flex-row gap-4'
+      }`}
+    >
+      <div className={`
+        ${isFullScreenChat ? 'hidden' : 'md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-2rem)] flex flex-col gap-4'}
+      `}>
         <Card>
           <CardHeader>
             <CardTitle>Customize Friend</CardTitle>
@@ -356,9 +370,24 @@ export default function ChatterSimPage() {
         <MessageComposer queue={customMessageQueue} setQueue={setCustomMessageQueue} />
       </div>
 
-      <div className="md:w-2/3 lg:w-3/4 flex flex-col items-center justify-center">
-        <div className="w-full max-w-sm h-[calc(100vh-2rem-env(safe-area-inset-bottom))] sm:h-[calc(100vh-4rem-env(safe-area-inset-bottom))] max-h-[800px] bg-background flex flex-col shadow-2xl rounded-xl overflow-hidden border-4 border-slate-700 dark:border-slate-600">
-          <ChatHeader name={friendName} avatarUrl={friendAvatarUrl || undefined} isOnline={isSimulating || showFriendTypingIndicator} />
+      <div className={`flex flex-col 
+        ${isFullScreenChat 
+          ? 'w-full h-full max-w-none max-h-none md:max-w-3xl md:max-h-[95vh]' 
+          : 'items-center justify-center flex-grow md:w-2/3 lg:w-3/4'}
+      `}>
+        <div className={`bg-background flex flex-col shadow-2xl overflow-hidden
+          ${isFullScreenChat 
+            ? 'w-full h-full rounded-none border-none md:rounded-xl md:border-2 border-slate-700 dark:border-slate-600'
+            : 'w-full max-w-sm h-[calc(100vh-2rem-env(safe-area-inset-bottom))] sm:h-[calc(100vh-4rem-env(safe-area-inset-bottom))] max-h-[800px] rounded-xl border-4 border-slate-700 dark:border-slate-600'
+          }
+        `}>
+          <ChatHeader 
+            name={friendName} 
+            avatarUrl={friendAvatarUrl || undefined} 
+            isOnline={isSimulating || showFriendTypingIndicator}
+            isFullScreen={isFullScreenChat}
+            onToggleFullScreen={toggleFullScreenChat}
+          />
           <ChatWindow
             messages={messages}
             showTypingIndicator={showFriendTypingIndicator}
@@ -374,15 +403,16 @@ export default function ChatterSimPage() {
               showSendButton={showSendButton}
             />
           )}
-          <div className="p-4 border-t bg-background dark:bg-primary/10">
+          <div className={`border-t bg-background dark:bg-primary/10 ${isFullScreenChat ? 'p-2' : 'p-4'}`}>
             <Button
               onClick={() => simulateChat(customMessageQueue)}
               disabled={isSimulating || customMessageQueue.length === 0}
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+              size={isFullScreenChat ? 'sm' : 'default'}
               aria-label="Start chat simulation"
             >
-              <PlayCircle className="mr-2 h-5 w-5" />
-              {isSimulating ? "Simulating..." : "Simulate Chat"}
+              <PlayCircle className={`mr-2 ${isFullScreenChat ? 'h-4 w-4' : 'h-5 w-5'}`} />
+              {isSimulating ? "Simulating..." : (isFullScreenChat ? "Simulate" : "Simulate Chat")}
             </Button>
           </div>
         </div>
