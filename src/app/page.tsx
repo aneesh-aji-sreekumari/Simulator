@@ -18,6 +18,7 @@ import { Slider } from "@/components/ui/slider";
 import NextImage from "next/image";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 
 const TYPING_SPEED_MS = 80;
@@ -71,7 +72,7 @@ export default function ChatterSimPage() {
   const [chatAspectRatio, setChatAspectRatio] = useState<string>("free");
   const [customRatioWidth, setCustomRatioWidth] = useState<number>(9);
   const [customRatioHeight, setCustomRatioHeight] = useState<number>(16);
-  const [currentTheme, setCurrentTheme] = useState<string>('light'); // Default to light, will be overridden by localStorage
+  const [currentTheme, setCurrentTheme] = useState<string>('light'); 
 
   // Transient UI/Helper States
   const [chatWallpaperUrlInput, setChatWallpaperUrlInput] = useState<string>("");
@@ -87,6 +88,8 @@ export default function ChatterSimPage() {
   const videoCompletionPromises = useRef<Record<string, () => void>>({});
   const autoStartOnFullScreenRef = useRef<boolean>(false);
   const initialSettingsLoadedRef = useRef<boolean>(false);
+
+  const { toast } = useToast();
 
   // Load Theme from localStorage
   useEffect(() => {
@@ -123,7 +126,7 @@ export default function ChatterSimPage() {
           setChatWallpaperUrl(settings.chatWallpaperUrl);
           if (settings.chatWallpaperUrl.startsWith("data:")) {
             setIsChatWallpaperUploaded(true);
-            setChatWallpaperUrlInput(""); // Clear input if it was a data URI
+            setChatWallpaperUrlInput(""); 
           } else {
             setChatWallpaperUrlInput(settings.chatWallpaperUrl);
             setIsChatWallpaperUploaded(false);
@@ -143,7 +146,7 @@ export default function ChatterSimPage() {
   // Save app settings to localStorage
   useEffect(() => {
     if (!initialSettingsLoadedRef.current) {
-      return; // Don't save until initial settings are loaded
+      return; 
     }
     const settingsToSave = {
       friendName,
@@ -154,7 +157,25 @@ export default function ChatterSimPage() {
       customRatioWidth,
       customRatioHeight,
     };
-    localStorage.setItem(APP_SETTINGS_LOCAL_STORAGE_KEY, JSON.stringify(settingsToSave));
+    try {
+      localStorage.setItem(APP_SETTINGS_LOCAL_STORAGE_KEY, JSON.stringify(settingsToSave));
+    } catch (error) {
+      if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.code === 22)) {
+        toast({
+          title: "Settings Not Saved",
+          description: "Could not save settings. Uploaded images might be too large for local storage. Try using smaller files or image URLs.",
+          variant: "destructive",
+          duration: 7000,
+        });
+      } else {
+        console.error("Failed to save app settings to localStorage", error);
+        toast({
+          title: "Error Saving Settings",
+          description: "An unexpected error occurred while trying to save your preferences.",
+          variant: "destructive",
+        });
+      }
+    }
   }, [
     friendName,
     friendAvatarUrl,
@@ -163,6 +184,7 @@ export default function ChatterSimPage() {
     chatAspectRatio,
     customRatioWidth,
     customRatioHeight,
+    toast, 
   ]);
 
 
@@ -340,7 +362,7 @@ export default function ChatterSimPage() {
 
             if (item.content) {
               const audio = new Audio(item.content);
-              audio.volume = soundEffectsVolume; // Assuming friend's audio messages also respect this global volume
+              audio.volume = soundEffectsVolume; 
               const playbackPromise = new Promise<void>((resolvePlayback, rejectPlayback) => {
                 if (signal.aborted) return rejectPlayback(new DOMException("Aborted", "AbortError"));
                 const onAbort = () => {
@@ -352,7 +374,7 @@ export default function ChatterSimPage() {
                 audio.oncanplaythrough = () => audio.play().catch(err => {
                   console.error("Error playing my recording sim audio:", err);
                   signal.removeEventListener('abort', onAbort);
-                  resolvePlayback(); // Resolve even on error to continue simulation
+                  resolvePlayback(); 
                 });
                 audio.onended = () => {
                     signal.removeEventListener('abort', onAbort);
@@ -361,9 +383,9 @@ export default function ChatterSimPage() {
                 audio.onerror = (e) => {
                   console.error("Error during my recording sim audio playback:", e);
                   signal.removeEventListener('abort', onAbort);
-                  resolvePlayback(); // Resolve even on error
+                  resolvePlayback(); 
                 };
-                audio.load(); // Ensure it tries to load
+                audio.load(); 
               });
               await playbackPromise;
             } else {
@@ -526,7 +548,7 @@ export default function ChatterSimPage() {
       if (customMessageQueue.length > 0 && !isSimulating) {
         handleStartSimulation();
       }
-      autoStartOnFullScreenRef.current = false; // Reset the flag
+      autoStartOnFullScreenRef.current = false; 
     }
   }, [isFullScreenChat, customMessageQueue, isSimulating, handleStartSimulation]);
 
@@ -628,11 +650,11 @@ export default function ChatterSimPage() {
   };
 
 
-  const appHeaderHeight = "60px"; // Only relevant if header is visible
+  const appHeaderHeight = "60px"; 
 
   const dynamicStyles = {
     "--app-header-height": isFullScreenChat ? "0px" : appHeaderHeight,
-    "--app-main-padding-y": isFullScreenChat ? "0px" : "1rem", // p-4 for main when not fullscreen
+    "--app-main-padding-y": isFullScreenChat ? "0px" : "1rem", 
   } as React.CSSProperties;
 
 
