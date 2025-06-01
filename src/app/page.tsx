@@ -46,8 +46,8 @@ const SOUND_MY_AUDIO_RECORD_START = "/sounds/my_audio_record_start.mp3";
 const SOUND_MY_AUDIO_SENT = "/sounds/my_audio_sent.mp3";
 const SOUND_MY_TYPING = "/sounds/my_typing.mp3";
 
-const MAX_CHAT_WIDTH_PX = 384; 
-const MAX_CHAT_HEIGHT_PX = 750; 
+const MAX_CHAT_WIDTH_PX = 384;
+const MAX_CHAT_HEIGHT_PX = 750;
 
 
 export default function ChatterSimPage() {
@@ -83,6 +83,7 @@ export default function ChatterSimPage() {
   const [customRatioWidth, setCustomRatioWidth] = useState<number>(9);
   const [customRatioHeight, setCustomRatioHeight] = useState<number>(16);
   const [appliedChatDimensions, setAppliedChatDimensions] = useState<{ width: string; height: string } | null>(null);
+  const autoStartOnFullScreenRef = useRef<boolean>(false);
 
 
   useEffect(() => {
@@ -93,7 +94,7 @@ export default function ChatterSimPage() {
 
   useEffect(() => {
     if (currentTheme === undefined) {
-      return; 
+      return;
     }
     if (currentTheme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -109,16 +110,16 @@ export default function ChatterSimPage() {
       setAppliedChatDimensions(null);
       return;
     }
-  
+
     let ratioW: number;
     let ratioH: number;
-  
+
     if (chatAspectRatio === "custom") {
       if (customRatioWidth > 0 && customRatioHeight > 0) {
         ratioW = customRatioWidth;
         ratioH = customRatioHeight;
       } else {
-        setAppliedChatDimensions(null); 
+        setAppliedChatDimensions(null);
         return;
       }
     } else {
@@ -126,19 +127,19 @@ export default function ChatterSimPage() {
       if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) && parts[0] > 0 && parts[1] > 0) {
         [ratioW, ratioH] = parts;
       } else {
-        setAppliedChatDimensions(null); 
+        setAppliedChatDimensions(null);
         return;
       }
     }
-  
+
     const containerWidth = MAX_CHAT_WIDTH_PX;
     const containerHeight = MAX_CHAT_HEIGHT_PX;
     const targetAspectRatioValue = ratioW / ratioH;
     const containerAspectRatioValue = containerWidth / containerHeight;
-  
+
     let finalWidth: number;
     let finalHeight: number;
-  
+
     if (targetAspectRatioValue >= containerAspectRatioValue) {
       finalWidth = containerWidth;
       finalHeight = finalWidth / targetAspectRatioValue;
@@ -146,12 +147,12 @@ export default function ChatterSimPage() {
       finalHeight = containerHeight;
       finalWidth = finalHeight * targetAspectRatioValue;
     }
-  
+
     setAppliedChatDimensions({
       width: `${Math.round(finalWidth)}px`,
       height: `${Math.round(finalHeight)}px`,
     });
-  
+
   }, [chatAspectRatio, customRatioWidth, customRatioHeight, isFullScreenChat]);
 
   useEffect(() => {
@@ -174,12 +175,7 @@ export default function ChatterSimPage() {
     setCurrentTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   };
 
-
-  const toggleFullScreenChat = useCallback(() => {
-    setIsFullScreenChat(prev => !prev);
-  }, []);
-
-  const playSound = (soundUrl: string) => {
+  const playSound = useCallback((soundUrl: string) => {
     try {
       const audio = new Audio(soundUrl);
       audio.volume = soundEffectsVolume;
@@ -187,10 +183,10 @@ export default function ChatterSimPage() {
     } catch (error) {
       console.warn(`Error creating audio for ${soundUrl}:`, error);
     }
-  };
+  }, [soundEffectsVolume]);
 
 
-  const addMessage = (newMessageOmitIdTimestamp: Omit<Message, "id" | "timestamp">) => {
+  const addMessage = useCallback((newMessageOmitIdTimestamp: Omit<Message, "id" | "timestamp">) => {
     const newMessage = {
       ...newMessageOmitIdTimestamp,
       id: Date.now().toString() + Math.random(),
@@ -198,81 +194,14 @@ export default function ChatterSimPage() {
     };
     setMessages(prev => [...prev, newMessage]);
     return newMessage.id;
-  };
+  }, [setMessages]);
 
-  const updateMessageTicks = (messageId: string, ticks: "sent" | "delivered") => {
+  const updateMessageTicks = useCallback((messageId: string, ticks: "sent" | "delivered") => {
     setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, ticks } : msg));
-  };
-
-  const handleAudioPlaybackEnd = useCallback((messageId: string) => {
-    setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, isPlaying: false } : msg));
-    audioCompletionPromises.current[messageId]?.();
-    delete audioCompletionPromises.current[messageId];
-  }, []);
-
-  const handleVideoPlaybackEnd = useCallback((messageId: string) => {
-    setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, isVideoPlaying: false } : msg));
-    const videoMessageId = messageId;
-    videoCompletionPromises.current[videoMessageId]?.();
-    delete videoCompletionPromises.current[videoMessageId];
-  }, []);
-
-  const handleAvatarFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFriendAvatarUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const clearUploadedAvatar = () => {
-    setFriendAvatarUrl("https://placehold.co/80x80.png");
-    if (avatarFileInputRef.current) {
-      avatarFileInputRef.current.value = "";
-    }
-  };
-
-  const isAvatarUploaded = friendAvatarUrl.startsWith("data:image");
-
-  const handleChatWallpaperUrlInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setChatWallpaperUrlInput(e.target.value);
-  };
-
-  const setChatWallpaperFromUrl = () => {
-    setChatWallpaperUrl(chatWallpaperUrlInput);
-    setIsChatWallpaperUploaded(false);
-    if (chatWallpaperFileInputRef.current) {
-      chatWallpaperFileInputRef.current.value = "";
-    }
-  };
-
-  const handleChatWallpaperFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setChatWallpaperUrl(reader.result as string);
-        setIsChatWallpaperUploaded(true);
-        setChatWallpaperUrlInput("");
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const clearChatWallpaper = () => {
-    setChatWallpaperUrl("");
-    setChatWallpaperUrlInput("");
-    setIsChatWallpaperUploaded(false);
-    if (chatWallpaperFileInputRef.current) {
-      chatWallpaperFileInputRef.current.value = "";
-    }
-  };
+  }, [setMessages]);
 
 
-  const simulateChat = async (queue: MessageQueueItem[]) => {
+  const simulateChat = useCallback(async (queue: MessageQueueItem[]) => {
     if (!queue || queue.length === 0) {
       console.warn("Message queue is empty. Nothing to simulate.");
       return;
@@ -350,7 +279,7 @@ export default function ChatterSimPage() {
 
             if (item.content) {
               const audio = new Audio(item.content);
-              audio.volume = soundEffectsVolume; 
+              audio.volume = soundEffectsVolume;
               const playbackPromise = new Promise<void>((resolvePlayback, rejectPlayback) => {
                 if (signal.aborted) return rejectPlayback(new DOMException("Aborted", "AbortError"));
                 const onAbort = () => {
@@ -520,11 +449,42 @@ export default function ChatterSimPage() {
       setShowFriendTypingIndicator(false);
       simulationAbortControllerRef.current = null;
     }
-  };
+  }, [
+    addMessage,
+    updateMessageTicks,
+    playSound,
+    setIsSimulating,
+    setCurrentTypingText,
+    setShowSendButton,
+    setIsRecordingAudio,
+    setShowFriendTypingIndicator,
+    setMessages,
+    soundEffectsVolume // Added as playSound depends on it, and so does direct usage in text typing
+  ]);
 
-  const handleStartSimulation = () => {
+  const handleStartSimulation = useCallback(() => {
     simulateChat(customMessageQueue);
-  };
+  }, [customMessageQueue, simulateChat]);
+
+  useEffect(() => {
+    if (isFullScreenChat && autoStartOnFullScreenRef.current) {
+      if (customMessageQueue.length > 0 && !isSimulating) {
+        handleStartSimulation();
+      }
+      autoStartOnFullScreenRef.current = false; // Reset the flag
+    }
+  }, [isFullScreenChat, customMessageQueue, isSimulating, handleStartSimulation]);
+
+  const toggleFullScreenChat = useCallback(() => {
+    setIsFullScreenChat(prevIsFullScreen => {
+      const newIsFullScreen = !prevIsFullScreen;
+      if (newIsFullScreen) {
+        autoStartOnFullScreenRef.current = true;
+      }
+      return newIsFullScreen;
+    });
+  }, []);
+
 
   const handleStopSimulation = () => {
     if (simulationAbortControllerRef.current) {
@@ -545,8 +505,76 @@ export default function ChatterSimPage() {
   };
 
 
+  const handleAudioPlaybackEnd = useCallback((messageId: string) => {
+    setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, isPlaying: false } : msg));
+    audioCompletionPromises.current[messageId]?.();
+    delete audioCompletionPromises.current[messageId];
+  }, []);
+
+  const handleVideoPlaybackEnd = useCallback((messageId: string) => {
+    setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, isVideoPlaying: false } : msg));
+    const videoMessageId = messageId;
+    videoCompletionPromises.current[videoMessageId]?.();
+    delete videoCompletionPromises.current[videoMessageId];
+  }, []);
+
+  const handleAvatarFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFriendAvatarUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearUploadedAvatar = () => {
+    setFriendAvatarUrl("https://placehold.co/80x80.png");
+    if (avatarFileInputRef.current) {
+      avatarFileInputRef.current.value = "";
+    }
+  };
+
+  const isAvatarUploaded = friendAvatarUrl.startsWith("data:image");
+
+  const handleChatWallpaperUrlInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setChatWallpaperUrlInput(e.target.value);
+  };
+
+  const setChatWallpaperFromUrl = () => {
+    setChatWallpaperUrl(chatWallpaperUrlInput);
+    setIsChatWallpaperUploaded(false);
+    if (chatWallpaperFileInputRef.current) {
+      chatWallpaperFileInputRef.current.value = "";
+    }
+  };
+
+  const handleChatWallpaperFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setChatWallpaperUrl(reader.result as string);
+        setIsChatWallpaperUploaded(true);
+        setChatWallpaperUrlInput("");
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearChatWallpaper = () => {
+    setChatWallpaperUrl("");
+    setChatWallpaperUrlInput("");
+    setIsChatWallpaperUploaded(false);
+    if (chatWallpaperFileInputRef.current) {
+      chatWallpaperFileInputRef.current.value = "";
+    }
+  };
+
+
   const appHeaderHeight = "60px";
-  const appMainPaddingY = "32px"; 
+  const appMainPaddingY = "0px"; // No padding in main when header is potentially hidden
 
   const chatAreaHeightNonFullScreen = `h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))]`;
 
@@ -559,7 +587,7 @@ export default function ChatterSimPage() {
   const chatScreenClasses = cn(
     "flex flex-col overflow-hidden bg-background transition-all duration-300 ease-in-out",
     isFullScreenChat
-      ? `w-full h-full` 
+      ? `w-full h-full` // Takes full screen as main is h-screen
       : appliedChatDimensions
         ? `shadow-2xl rounded-xl border-4 border-slate-700 dark:border-slate-600`
         : `w-full max-w-sm ${chatAreaHeightNonFullScreen} max-h-[750px] shadow-2xl rounded-xl border-4 border-slate-700 dark:border-slate-600`
@@ -645,7 +673,6 @@ export default function ChatterSimPage() {
                 <div className="space-y-2 border-t pt-4">
                   <Label htmlFor="chatWallpaperUrlInput">Chat Wallpaper</Label>
                   <div className="flex items-center gap-2">
-                     {/* Removed preview from here as it's applied to ChatWindow */}
                     <Input
                       id="chatWallpaperUrlInput"
                       value={isChatWallpaperUploaded ? "Using uploaded file" : chatWallpaperUrlInput}
@@ -770,4 +797,3 @@ export default function ChatterSimPage() {
     </div>
   );
 }
-
