@@ -1,6 +1,6 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UserCircle } from "lucide-react";
+import { UserCircle, Video, Phone, MoreVertical } from "lucide-react";
 
 interface ChatHeaderProps {
   name: string;
@@ -23,7 +23,17 @@ export default function ChatHeader({ name, avatarUrl, isOnline }: ChatHeaderProp
           {isOnline && <p className="text-xs text-primary-foreground/90">online</p>}
         </div>
       </div>
-      {/* Removed MoreVertical icon and full-screen toggle logic as it's now in AppHeader */}
+      <div className="flex items-center gap-3">
+        <button aria-label="Video call" className="focus:outline-none p-1 rounded-full hover:bg-primary-foreground/10">
+          <Video size={22} className="text-primary-foreground" />
+        </button>
+        <button aria-label="Voice call" className="focus:outline-none p-1 rounded-full hover:bg-primary-foreground/10">
+          <Phone size={22} className="text-primary-foreground" />
+        </button>
+        <button aria-label="More options" className="focus:outline-none p-1 rounded-full hover:bg-primary-foreground/10">
+          <MoreVertical size={22} className="text-primary-foreground" />
+        </button>
+      </div>
     </header>
   );
 }
