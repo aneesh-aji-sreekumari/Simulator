@@ -9,7 +9,7 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
 import AppHeader from "@/components/layout/AppHeader";
-import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Image as ImageIcon } from "lucide-react";
+import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Image as ImageIcon, Moon, Sun } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -49,6 +49,8 @@ const SOUND_MY_TYPING = "/sounds/my_typing.mp3";
 const MAX_CHAT_WIDTH_PX = 384;
 const MAX_CHAT_HEIGHT_PX = 750;
 
+const APP_SETTINGS_LOCAL_STORAGE_KEY = "chatterSimAppSettings";
+
 
 export default function ChatterSimPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -61,41 +63,44 @@ export default function ChatterSimPage() {
     return JSON.parse(JSON.stringify(defaultMessageQueue));
   });
 
+  // Persisted States
   const [friendName, setFriendName] = useState<string>("Alice");
   const [friendAvatarUrl, setFriendAvatarUrl] = useState<string>("https://placehold.co/80x80.png");
-  const avatarFileInputRef = useRef<HTMLInputElement>(null);
-
   const [chatWallpaperUrl, setChatWallpaperUrl] = useState<string>("");
-  const [chatWallpaperUrlInput, setChatWallpaperUrlInput] = useState<string>("");
-  const [isChatWallpaperUploaded, setIsChatWallpaperUploaded] = useState<boolean>(false);
-  const chatWallpaperFileInputRef = useRef<HTMLInputElement>(null);
-
-  const simulationAbortControllerRef = useRef<AbortController | null>(null);
-
-  const audioCompletionPromises = useRef<Record<string, () => void>>({});
-  const videoCompletionPromises = useRef<Record<string, () => void>>({});
-
-  const [isFullScreenChat, setIsFullScreenChat] = useState(false);
-  const [currentTheme, setCurrentTheme] = useState<string | undefined>(undefined);
   const [soundEffectsVolume, setSoundEffectsVolume] = useState<number>(1);
-
   const [chatAspectRatio, setChatAspectRatio] = useState<string>("free");
   const [customRatioWidth, setCustomRatioWidth] = useState<number>(9);
   const [customRatioHeight, setCustomRatioHeight] = useState<number>(16);
+  const [currentTheme, setCurrentTheme] = useState<string>('light'); // Default to light, will be overridden by localStorage
+
+  // Transient UI/Helper States
+  const [chatWallpaperUrlInput, setChatWallpaperUrlInput] = useState<string>("");
+  const [isChatWallpaperUploaded, setIsChatWallpaperUploaded] = useState<boolean>(false);
   const [appliedChatDimensions, setAppliedChatDimensions] = useState<{ width: string; height: string } | null>(null);
+  const [isFullScreenChat, setIsFullScreenChat] = useState(false);
+
+
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const chatWallpaperFileInputRef = useRef<HTMLInputElement>(null);
+  const simulationAbortControllerRef = useRef<AbortController | null>(null);
+  const audioCompletionPromises = useRef<Record<string, () => void>>({});
+  const videoCompletionPromises = useRef<Record<string, () => void>>({});
   const autoStartOnFullScreenRef = useRef<boolean>(false);
+  const initialSettingsLoadedRef = useRef<boolean>(false);
 
-
+  // Load Theme from localStorage
   useEffect(() => {
     const storedTheme = localStorage.getItem('theme');
-    const initialTheme = storedTheme === 'dark' ? 'dark' : 'light';
-    setCurrentTheme(initialTheme);
+    if (storedTheme === 'dark' || storedTheme === 'light') {
+      setCurrentTheme(storedTheme);
+    } else {
+      const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      setCurrentTheme(systemPrefersDark ? 'dark' : 'light');
+    }
   }, []);
 
+  // Apply and Save Theme
   useEffect(() => {
-    if (currentTheme === undefined) {
-      return;
-    }
     if (currentTheme === 'dark') {
       document.documentElement.classList.add('dark');
       localStorage.setItem('theme', 'dark');
@@ -104,6 +109,62 @@ export default function ChatterSimPage() {
       localStorage.setItem('theme', 'light');
     }
   }, [currentTheme]);
+
+
+  // Load other app settings from localStorage
+  useEffect(() => {
+    const storedSettings = localStorage.getItem(APP_SETTINGS_LOCAL_STORAGE_KEY);
+    if (storedSettings) {
+      try {
+        const settings = JSON.parse(storedSettings);
+        if (settings.friendName) setFriendName(settings.friendName);
+        if (settings.friendAvatarUrl) setFriendAvatarUrl(settings.friendAvatarUrl);
+        if (settings.chatWallpaperUrl) {
+          setChatWallpaperUrl(settings.chatWallpaperUrl);
+          if (settings.chatWallpaperUrl.startsWith("data:")) {
+            setIsChatWallpaperUploaded(true);
+            setChatWallpaperUrlInput(""); // Clear input if it was a data URI
+          } else {
+            setChatWallpaperUrlInput(settings.chatWallpaperUrl);
+            setIsChatWallpaperUploaded(false);
+          }
+        }
+        if (typeof settings.soundEffectsVolume === 'number') setSoundEffectsVolume(settings.soundEffectsVolume);
+        if (settings.chatAspectRatio) setChatAspectRatio(settings.chatAspectRatio);
+        if (typeof settings.customRatioWidth === 'number') setCustomRatioWidth(settings.customRatioWidth);
+        if (typeof settings.customRatioHeight === 'number') setCustomRatioHeight(settings.customRatioHeight);
+      } catch (error) {
+        console.error("Failed to parse app settings from localStorage", error);
+      }
+    }
+    initialSettingsLoadedRef.current = true;
+  }, []);
+
+  // Save app settings to localStorage
+  useEffect(() => {
+    if (!initialSettingsLoadedRef.current) {
+      return; // Don't save until initial settings are loaded
+    }
+    const settingsToSave = {
+      friendName,
+      friendAvatarUrl,
+      chatWallpaperUrl,
+      soundEffectsVolume,
+      chatAspectRatio,
+      customRatioWidth,
+      customRatioHeight,
+    };
+    localStorage.setItem(APP_SETTINGS_LOCAL_STORAGE_KEY, JSON.stringify(settingsToSave));
+  }, [
+    friendName,
+    friendAvatarUrl,
+    chatWallpaperUrl,
+    soundEffectsVolume,
+    chatAspectRatio,
+    customRatioWidth,
+    customRatioHeight,
+  ]);
+
 
   useEffect(() => {
     if (isFullScreenChat || chatAspectRatio === "free") {
@@ -194,11 +255,11 @@ export default function ChatterSimPage() {
     };
     setMessages(prev => [...prev, newMessage]);
     return newMessage.id;
-  }, [setMessages]);
+  }, []);
 
   const updateMessageTicks = useCallback((messageId: string, ticks: "sent" | "delivered") => {
     setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, ticks } : msg));
-  }, [setMessages]);
+  }, []);
 
 
   const simulateChat = useCallback(async (queue: MessageQueueItem[]) => {
@@ -241,7 +302,7 @@ export default function ChatterSimPage() {
 
             try {
               if (item.content.length > 0) {
-                typingLoopSound.play().catch(err => console.warn("Error playing looping typing sound:", err));
+                await typingLoopSound.play().catch(err => console.warn("Error playing looping typing sound:", err));
                 typingSoundActuallyPlayed = true;
               }
 
@@ -279,7 +340,7 @@ export default function ChatterSimPage() {
 
             if (item.content) {
               const audio = new Audio(item.content);
-              audio.volume = soundEffectsVolume;
+              audio.volume = soundEffectsVolume; // Assuming friend's audio messages also respect this global volume
               const playbackPromise = new Promise<void>((resolvePlayback, rejectPlayback) => {
                 if (signal.aborted) return rejectPlayback(new DOMException("Aborted", "AbortError"));
                 const onAbort = () => {
@@ -291,7 +352,7 @@ export default function ChatterSimPage() {
                 audio.oncanplaythrough = () => audio.play().catch(err => {
                   console.error("Error playing my recording sim audio:", err);
                   signal.removeEventListener('abort', onAbort);
-                  resolvePlayback();
+                  resolvePlayback(); // Resolve even on error to continue simulation
                 });
                 audio.onended = () => {
                     signal.removeEventListener('abort', onAbort);
@@ -300,9 +361,9 @@ export default function ChatterSimPage() {
                 audio.onerror = (e) => {
                   console.error("Error during my recording sim audio playback:", e);
                   signal.removeEventListener('abort', onAbort);
-                  resolvePlayback();
+                  resolvePlayback(); // Resolve even on error
                 };
-                audio.load();
+                audio.load(); // Ensure it tries to load
               });
               await playbackPromise;
             } else {
@@ -453,13 +514,7 @@ export default function ChatterSimPage() {
     addMessage,
     updateMessageTicks,
     playSound,
-    setIsSimulating,
-    setCurrentTypingText,
-    setShowSendButton,
-    setIsRecordingAudio,
-    setShowFriendTypingIndicator,
-    setMessages,
-    soundEffectsVolume // Added as playSound depends on it, and so does direct usage in text typing
+    soundEffectsVolume,
   ]);
 
   const handleStartSimulation = useCallback(() => {
@@ -573,24 +628,21 @@ export default function ChatterSimPage() {
   };
 
 
-  const appHeaderHeight = "60px";
-  const appMainPaddingY = "0px"; // No padding in main when header is potentially hidden
-
-  const chatAreaHeightNonFullScreen = `h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))]`;
-
+  const appHeaderHeight = "60px"; // Only relevant if header is visible
 
   const dynamicStyles = {
-    "--app-header-height": appHeaderHeight,
-    "--app-main-padding-y": appMainPaddingY,
+    "--app-header-height": isFullScreenChat ? "0px" : appHeaderHeight,
+    "--app-main-padding-y": isFullScreenChat ? "0px" : "1rem", // p-4 for main when not fullscreen
   } as React.CSSProperties;
+
 
   const chatScreenClasses = cn(
     "flex flex-col overflow-hidden bg-background transition-all duration-300 ease-in-out",
     isFullScreenChat
-      ? `w-full h-full` // Takes full screen as main is h-screen
+      ? `w-full h-full`
       : appliedChatDimensions
         ? `shadow-2xl rounded-xl border-4 border-slate-700 dark:border-slate-600`
-        : `w-full max-w-sm ${chatAreaHeightNonFullScreen} max-h-[750px] shadow-2xl rounded-xl border-4 border-slate-700 dark:border-slate-600`
+        : `w-full max-w-sm h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))] max-h-[750px] shadow-2xl rounded-xl border-4 border-slate-700 dark:border-slate-600`
   );
 
 
@@ -605,7 +657,7 @@ export default function ChatterSimPage() {
           onResetSimulation={handleResetSimulation}
           isSimulating={isSimulating}
           canSimulate={customMessageQueue.length > 0}
-          currentTheme={currentTheme || 'light'}
+          currentTheme={currentTheme}
           onToggleTheme={handleThemeToggle}
         />
       )}
@@ -786,7 +838,7 @@ export default function ChatterSimPage() {
                 wallpaperUrl={chatWallpaperUrl}
               />
               <KeypadArea
-                isSimulating={isSimulating && (currentTypingText !== "" || isRecordingAudio)}
+                isSimulating={currentTypingText !== "" || isRecordingAudio}
                 isRecordingAudio={isRecordingAudio}
                 typedText={currentTypingText}
                 showSendButton={showSendButton}
@@ -797,3 +849,4 @@ export default function ChatterSimPage() {
     </div>
   );
 }
+
