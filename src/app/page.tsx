@@ -611,16 +611,18 @@ export default function ChatterSimPage() {
                     </Button>
                   </>
                 )}
-                <audio 
-                    ref={bgAudioRef} 
-                    src={bgMusicSrc} 
-                    loop 
-                    onCanPlay={() => { 
-                        if (isBgMusicPlaying && bgAudioRef.current && bgAudioRef.current.paused) {
-                             bgAudioRef.current.play().catch(e => console.warn("Autoplay onCanPlay failed:", e));
-                        }
-                    }}
-                />
+                {bgMusicSrc && (
+                  <audio 
+                      ref={bgAudioRef} 
+                      src={bgMusicSrc} 
+                      loop 
+                      onCanPlay={() => { 
+                          if (isBgMusicPlaying && bgAudioRef.current && bgAudioRef.current.paused) {
+                               bgAudioRef.current.play().catch(e => console.warn("Autoplay onCanPlay failed:", e));
+                          }
+                      }}
+                  />
+                )}
               </CardContent>
             </Card>
 
