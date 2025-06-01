@@ -9,20 +9,17 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
 import AppHeader from "@/components/layout/AppHeader";
-import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Play, Pause, Music2, Maximize, Minimize, PlayCircle, StopCircle, RefreshCw } from "lucide-react";
+import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
-import { Slider } from "@/components/ui/slider";
 
 
 const TYPING_SPEED_MS = 80;
 const FRIEND_TYPING_INDICATOR_DURATION_MS = 1500;
 const READING_WORDS_PER_MINUTE = 200;
-const FADE_DURATION_MS = 300;
-const FADE_INTERVAL_MS = 20;
 
 
 const stoppableDelay = (ms: number, signal: AbortSignal) => {
@@ -35,60 +32,6 @@ const stoppableDelay = (ms: number, signal: AbortSignal) => {
       clearTimeout(timeoutId);
       reject(new DOMException("Aborted", "AbortError"));
     });
-  });
-};
-
-const fadeVolume = (
-  audioElement: HTMLAudioElement,
-  targetVolume: number,
-  duration: number,
-  signal: AbortSignal
-): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) {
-      // audioElement.volume = targetVolume; // Snap to target if aborted during fade
-      return reject(new DOMException("Aborted", "AbortError"));
-    }
-    if (!audioElement || audioElement.readyState < 1) { // Check if audio is loaded enough
-        // audioElement.volume = targetVolume; // Snap if not ready
-        return resolve(); // Or reject if this is an issue
-    }
-
-    const initialVolume = audioElement.volume;
-    const volumeChange = targetVolume - initialVolume;
-
-    if (Math.abs(volumeChange) < 0.01 && audioElement.volume.toFixed(2) === targetVolume.toFixed(2)) { // Already at target
-        return resolve();
-    }
-
-    const numSteps = Math.max(1, Math.floor(duration / FADE_INTERVAL_MS));
-    const stepSize = volumeChange / numSteps;
-    let currentStep = 0;
-
-    const intervalId = setInterval(() => {
-      if (signal.aborted) {
-        clearInterval(intervalId);
-        // audioElement.volume = targetVolume; // Snap to target on abort
-        return reject(new DOMException("Aborted", "AbortError"));
-      }
-
-      currentStep++;
-      const newVolume = initialVolume + stepSize * currentStep;
-      audioElement.volume = Math.max(0, Math.min(1, newVolume)); // Clamp between 0 and 1
-
-      if (currentStep >= numSteps) {
-        clearInterval(intervalId);
-        audioElement.volume = targetVolume; // Ensure exact target volume
-        resolve();
-      }
-    }, FADE_INTERVAL_MS);
-
-    const abortHandler = () => {
-      clearInterval(intervalId);
-      // audioElement.volume = targetVolume; // Snap to target on abort
-      reject(new DOMException("Aborted", "AbortError"));
-    };
-    signal.addEventListener('abort', abortHandler, { once: true });
   });
 };
 
@@ -122,14 +65,6 @@ export default function ChatterSimPage() {
   const videoCompletionPromises = useRef<Record<string, () => void>>({});
 
   const [isFullScreenChat, setIsFullScreenChat] = useState(false);
-
-  const [bgMusicSrc, setBgMusicSrc] = useState<string>('');
-  const [bgMusicUrlInput, setBgMusicUrlInput] = useState<string>('');
-  const [bgMusicVolume, setBgMusicVolume] = useState<number>(0.2);
-  const [isBgMusicPlaying, setIsBgMusicPlaying] = useState<boolean>(false);
-  const [bgMusicIsUploaded, setBgMusicIsUploaded] = useState<boolean>(false);
-  const bgAudioRef = useRef<HTMLAudioElement>(null);
-  const bgMusicFileInputRef = useRef<HTMLInputElement>(null);
 
 
   const toggleFullScreenChat = useCallback(() => {
@@ -192,75 +127,6 @@ export default function ChatterSimPage() {
 
   const isAvatarUploaded = friendAvatarUrl.startsWith("data:image");
 
-  const handleBgMusicUrlInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const newUrl = e.target.value;
-    setBgMusicUrlInput(newUrl);
-    if (bgMusicIsUploaded) {
-        setBgMusicIsUploaded(false);
-    }
-    if (!newUrl && !bgMusicIsUploaded) {
-        setBgMusicSrc('');
-        setIsBgMusicPlaying(false);
-    }
-  };
-
-  const handleSetCurrentUrlAsBackgroundMusic = () => {
-    if (bgMusicUrlInput && !bgMusicIsUploaded) {
-        setBgMusicSrc(bgMusicUrlInput);
-        if (bgMusicFileInputRef.current) bgMusicFileInputRef.current.value = "";
-    } else if (!bgMusicUrlInput) {
-        clearBgMusic();
-    }
-  };
-
-  const handleBgMusicFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setBgMusicSrc(reader.result as string);
-        setBgMusicIsUploaded(true);
-        setBgMusicUrlInput(file.name);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const clearBgMusic = () => {
-    setBgMusicSrc('');
-    setBgMusicUrlInput('');
-    setBgMusicIsUploaded(false);
-    setIsBgMusicPlaying(false);
-    if (bgMusicFileInputRef.current) {
-      bgMusicFileInputRef.current.value = "";
-    }
-  };
-
-  const toggleBgMusicPlayPause = () => {
-    if (bgMusicSrc) {
-      setIsBgMusicPlaying(prev => !prev);
-    }
-  };
-
-  const handleBgMusicVolumeChange = (value: number[]) => {
-    setBgMusicVolume(value[0] / 100);
-  };
-
-  useEffect(() => {
-    const audio = bgAudioRef.current;
-    if (audio) {
-      if (isBgMusicPlaying && bgMusicSrc) {
-        if (audio.src !== bgMusicSrc) {
-          audio.src = bgMusicSrc;
-        }
-        audio.volume = bgMusicVolume; // Set to user's desired volume
-        audio.play().catch(error => console.warn("BG Music play error:", error));
-      } else {
-        audio.pause();
-      }
-    }
-  }, [isBgMusicPlaying, bgMusicSrc, bgMusicVolume]);
-
 
   const simulateChat = async (queue: MessageQueueItem[]) => {
     if (!queue || queue.length === 0) {
@@ -278,8 +144,6 @@ export default function ChatterSimPage() {
     setShowFriendTypingIndicator(false);
     setMessages([]);
 
-    if (bgMusicSrc) setIsBgMusicPlaying(true);
-
 
     try {
       await stoppableDelay(500, signal);
@@ -287,16 +151,6 @@ export default function ChatterSimPage() {
       for (let i = 0; i < queue.length; i++) {
         if (signal.aborted) return;
         const item = queue[i];
-        const nextItem = queue[i+1];
-
-        const isCurrentItemMediaWithContent = (item.type === "audio" || item.type === "video") && item.content;
-
-        if (isCurrentItemMediaWithContent && bgAudioRef.current && isBgMusicPlaying) {
-            try {
-                await fadeVolume(bgAudioRef.current, 0, FADE_DURATION_MS, signal);
-            } catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return; throw e; }
-        }
-
 
         if (item.sender === "me") {
           setShowKeypadInputArea(true);
@@ -485,16 +339,6 @@ export default function ChatterSimPage() {
           }
         }
 
-        // After current item's media (if any) has finished processing
-        if (isCurrentItemMediaWithContent && bgAudioRef.current && isBgMusicPlaying && !signal.aborted) {
-            const nextItemIsAlsoMediaWithContent = nextItem && (nextItem.type === "audio" || nextItem.type === "video") && nextItem.content;
-            if (!nextItemIsAlsoMediaWithContent) { // If next is not media with content, or no next item
-                try {
-                    await fadeVolume(bgAudioRef.current, bgMusicVolume, FADE_DURATION_MS, signal);
-                } catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return; throw e; }
-            }
-        }
-
         if (signal.aborted) return;
         await stoppableDelay(item.delayAfter, signal);
       }
@@ -507,7 +351,6 @@ export default function ChatterSimPage() {
     } finally {
       setIsSimulating(false);
       setShowKeypadInputArea(false);
-      if (bgMusicSrc) setIsBgMusicPlaying(false); // Stop BG music when sim ends
       simulationAbortControllerRef.current = null;
     }
   };
@@ -520,7 +363,6 @@ export default function ChatterSimPage() {
     if (simulationAbortControllerRef.current) {
       simulationAbortControllerRef.current.abort();
     }
-    // isBgMusicPlaying will be set to false in simulateChat's finally block
   };
 
   const handleResetSimulation = () => {
@@ -534,10 +376,6 @@ export default function ChatterSimPage() {
     setShowKeypadInputArea(false);
     setShowSendButton(false);
     setIsSimulating(false);
-    // isBgMusicPlaying will be set to false in simulateChat's finally block if it was running
-    // Or, if not running, ensure it's off:
-    if (bgMusicSrc && !isSimulating) setIsBgMusicPlaying(false);
-
   };
 
 
@@ -628,83 +466,6 @@ export default function ChatterSimPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center"><Music2 className="mr-2 h-5 w-5" /> Background Music</CardTitle>
-                <CardDescription>Add music to play during the simulation.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-1">
-                  <Label htmlFor="bgMusicUrlInput">Music URL or Uploaded File Name</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="bgMusicUrlInput"
-                      value={bgMusicUrlInput}
-                      onChange={handleBgMusicUrlInputChange}
-                      placeholder="Enter music URL or see file name"
-                      className="flex-grow"
-                      disabled={bgMusicIsUploaded && !!bgMusicSrc}
-                    />
-                    {bgMusicUrlInput && !bgMusicIsUploaded && (
-                        <Button onClick={handleSetCurrentUrlAsBackgroundMusic} size="sm" variant="outline" className="flex-shrink-0">Set URL</Button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="text-sm text-muted-foreground text-center my-1">OR</div>
-
-                <div className="flex items-center gap-2">
-                    <Label
-                        htmlFor="bg-music-file-input"
-                        className={`w-full inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-4 py-2 ${!!bgMusicUrlInput && !bgMusicIsUploaded ? 'bg-secondary/50 cursor-not-allowed' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer'}`}
-                    >
-                        <FileUpIcon className="mr-2 h-4 w-4" /> Upload Music File
-                    </Label>
-                    <Input
-                        id="bg-music-file-input"
-                        ref={bgMusicFileInputRef}
-                        type="file"
-                        accept="audio/*"
-                        onChange={handleBgMusicFileChange}
-                        className="hidden"
-                        disabled={!!bgMusicUrlInput && !bgMusicIsUploaded}
-                    />
-                    {bgMusicSrc && (
-                        <Button variant="outline" size="iconSm" onClick={clearBgMusic} aria-label="Clear background music" className="flex-shrink-0">
-                            <XCircleIcon className="h-4 w-4" />
-                        </Button>
-                    )}
-                </div>
-
-                {bgMusicSrc && (
-                  <>
-                    <div>
-                      <Label htmlFor="bgMusicVolume">Volume</Label>
-                      <Slider
-                        id="bgMusicVolume"
-                        defaultValue={[bgMusicVolume * 100]}
-                        max={100}
-                        step={1}
-                        onValueChange={handleBgMusicVolumeChange}
-                        className="mt-1"
-                      />
-                    </div>
-                    <Button onClick={toggleBgMusicPlayPause} variant="outline" className="w-full">
-                      {isBgMusicPlaying ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}
-                      {isBgMusicPlaying ? "Pause Music" : "Play Music"}
-                    </Button>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-            {bgMusicSrc && (
-              <audio
-                  ref={bgAudioRef}
-                  src={bgMusicSrc}
-                  loop
-              />
-            )}
-
             <MessageComposer queue={customMessageQueue} setQueue={setCustomMessageQueue} />
           </div>
         )}
@@ -737,5 +498,6 @@ export default function ChatterSimPage() {
     </div>
   );
 }
+    
 
     
