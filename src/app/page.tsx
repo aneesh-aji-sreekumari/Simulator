@@ -9,7 +9,7 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
 import AppHeader from "@/components/layout/AppHeader";
-import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Play, Pause, Music2, Maximize, Minimize } from "lucide-react";
+import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Play, Pause, Music2, Maximize, Minimize, PlayCircle, StopCircle, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ import { Slider } from "@/components/ui/slider";
 const TYPING_SPEED_MS = 80;
 const FRIEND_TYPING_INDICATOR_DURATION_MS = 1500;
 const READING_WORDS_PER_MINUTE = 200;
-const BG_MUSIC_PAUSE_DELAY_MS = 200; // Delay for BG music to pause before friend's media
+const BG_MUSIC_PAUSE_DELAY_MS = 200; // Delay for BG music to pause before friend's/my media
 
 const stoppableDelay = (ms: number, signal: AbortSignal) => {
   return new Promise<void>((resolve, reject) => {
@@ -223,9 +223,6 @@ export default function ChatterSimPage() {
     const signal = simulationAbortControllerRef.current.signal;
 
     setIsSimulating(true);
-    if (bgMusicSrc) { // Start BG music if loaded
-      setIsBgMusicPlaying(true);
-    }
     setShowKeypadInputArea(false);
     setCurrentTypingText("");
     setIsRecordingAudio(false);
@@ -244,6 +241,8 @@ export default function ChatterSimPage() {
           if (signal.aborted) return;
 
           let sentMessageId: string | undefined;
+          let bgMusicPausedForMyAudio = false;
+
 
           if (item.type === "text") {
             setShowSendButton(false);
@@ -274,6 +273,18 @@ export default function ChatterSimPage() {
             setShowSendButton(false);
 
             if (item.content) {
+              // Pause BG Music if playing and my audio content exists
+              if (isBgMusicPlaying) {
+                bgMusicPausedForMyAudio = true;
+                setIsBgMusicPlaying(false);
+                try {
+                  await stoppableDelay(BG_MUSIC_PAUSE_DELAY_MS, signal);
+                } catch (e) {
+                  if (!(e instanceof DOMException && e.name === 'AbortError')) throw e;
+                }
+                if (signal.aborted) return;
+              }
+
               const audio = new Audio(item.content);
               const playbackPromise = new Promise<void>((resolve, reject) => {
                 if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
@@ -300,6 +311,12 @@ export default function ChatterSimPage() {
                 audio.load();
               });
               await playbackPromise;
+
+              // Resume BG Music if it was paused for this audio and not aborted
+              if (bgMusicPausedForMyAudio && !signal.aborted) {
+                setIsBgMusicPlaying(true);
+              }
+
             } else {
               await stoppableDelay(item.audioDuration || 2000, signal);
             }
@@ -316,6 +333,8 @@ export default function ChatterSimPage() {
             playSound(SOUND_MY_AUDIO_SENT);
 
           } else if (item.type === "image" || item.type === "gif" || item.type === "sticker" || item.type === "video") {
+            // Note: "my" video messages do not currently pause background music like friend's video.
+            // This could be added similarly to "my" audio if needed.
             setCurrentTypingText(`Sending ${item.type}...`);
             setShowSendButton(true);
             await stoppableDelay(700, signal);
@@ -351,14 +370,13 @@ export default function ChatterSimPage() {
           let bgMusicPausedByThisMessage = false;
           if ((item.type === "audio" || item.type === "video") && item.content && isBgMusicPlaying) {
               bgMusicPausedByThisMessage = true;
-              setIsBgMusicPlaying(false); // Request pause
+              setIsBgMusicPlaying(false); 
               try {
-                  await stoppableDelay(BG_MUSIC_PAUSE_DELAY_MS, signal); // Allow time for pause to take effect
+                  await stoppableDelay(BG_MUSIC_PAUSE_DELAY_MS, signal); 
               } catch (e) {
-                  // If aborted during this small delay, the main abort handling will ensure bgMusic is off.
                   if (!(e instanceof DOMException && e.name === 'AbortError')) throw e;
               }
-              if (signal.aborted) return; // Check again if aborted during the small delay
+              if (signal.aborted) return; 
           }
 
           if (item.type === "text") {
@@ -397,7 +415,7 @@ export default function ChatterSimPage() {
                       resolve();
                    };
                 });
-              } catch (e) { if (!(e instanceof DOMException && e.name === 'AbortError')) throw e; /* Absorb AbortError if media playback was cut short */ }
+              } catch (e) { if (!(e instanceof DOMException && e.name === 'AbortError')) throw e; }
             }
           } else if (item.type === "video") {
             if (!item.content) {
@@ -428,7 +446,7 @@ export default function ChatterSimPage() {
                       resolve();
                    };
                 });
-              } catch (e) { if (!(e instanceof DOMException && e.name === 'AbortError')) throw e; /* Absorb AbortError */ }
+              } catch (e) { if (!(e instanceof DOMException && e.name === 'AbortError')) throw e; }
             }
           } else if (item.type === "image" || item.type === "gif" || item.type === "sticker") {
              addMessage({ sender: "friend", type: item.type, content: item.content });
@@ -437,7 +455,7 @@ export default function ChatterSimPage() {
           }
           
           if (bgMusicPausedByThisMessage && !signal.aborted) {
-            setIsBgMusicPlaying(true); // Request resume BG music
+            setIsBgMusicPlaying(true); 
           }
         }
         if (signal.aborted) return;
@@ -452,20 +470,23 @@ export default function ChatterSimPage() {
     } finally {
       setIsSimulating(false);
       setShowKeypadInputArea(false);
-      setIsBgMusicPlaying(false); // Always stop BG music when simulation ends/aborts
+      setIsBgMusicPlaying(false); 
       simulationAbortControllerRef.current = null;
     }
   };
   
   const handleStartSimulation = () => {
     simulateChat(customMessageQueue);
+    if (bgMusicSrc) {
+        setIsBgMusicPlaying(true);
+    }
   };
 
   const handleStopSimulation = () => {
     if (simulationAbortControllerRef.current) {
       simulationAbortControllerRef.current.abort();
     }
-    setIsBgMusicPlaying(false); // Explicitly stop bg music on manual stop
+    setIsBgMusicPlaying(false); 
   };
 
   const handleResetSimulation = () => {
@@ -479,7 +500,7 @@ export default function ChatterSimPage() {
     setShowKeypadInputArea(false);
     setShowSendButton(false);
     setIsSimulating(false);
-    setIsBgMusicPlaying(false); // Explicitly stop bg music on reset
+    setIsBgMusicPlaying(false); 
   };
 
 
@@ -684,4 +705,3 @@ export default function ChatterSimPage() {
     </div>
   );
 }
-
