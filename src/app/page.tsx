@@ -50,7 +50,6 @@ export default function ChatterSimPage() {
   const [currentTypingText, setCurrentTypingText] = useState("");
   const [showFriendTypingIndicator, setShowFriendTypingIndicator] = useState(false);
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
-  const [showKeypadInputArea, setShowKeypadInputArea] = useState(false);
   const [showSendButton, setShowSendButton] = useState(false);
   const [customMessageQueue, setCustomMessageQueue] = useState<MessageQueueItem[]>(() => {
     return JSON.parse(JSON.stringify(defaultMessageQueue));
@@ -109,7 +108,7 @@ export default function ChatterSimPage() {
 
   const handleVideoPlaybackEnd = useCallback((messageId: string) => {
     setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, isVideoPlaying: false } : msg));
-    const videoMessageId = messageId; // Ensure correct variable name if different elsewhere
+    const videoMessageId = messageId; 
     videoCompletionPromises.current[videoMessageId]?.();
     delete videoCompletionPromises.current[videoMessageId];
   }, []);
@@ -178,8 +177,8 @@ export default function ChatterSimPage() {
     const signal = simulationAbortControllerRef.current.signal;
 
     setIsSimulating(true);
-    setShowKeypadInputArea(false);
     setCurrentTypingText("");
+    setShowSendButton(false);
     setIsRecordingAudio(false);
     setShowFriendTypingIndicator(false);
     setMessages([]);
@@ -193,8 +192,7 @@ export default function ChatterSimPage() {
         const item = queue[i];
 
         if (item.sender === "me") {
-          setShowKeypadInputArea(true);
-          await stoppableDelay(300, signal);
+          await stoppableDelay(300, signal); 
           if (signal.aborted) return;
 
           let sentMessageId: string | undefined;
@@ -241,7 +239,7 @@ export default function ChatterSimPage() {
           } else if (item.type === "audio") {
             playSound(SOUND_MY_AUDIO_RECORD_START);
             setIsRecordingAudio(true);
-            setCurrentTypingText("");
+            setCurrentTypingText(""); 
             setShowSendButton(false);
 
             if (item.content) { 
@@ -309,10 +307,14 @@ export default function ChatterSimPage() {
             if (signal.aborted) return;
             updateMessageTicks(sentMessageId, "delivered");
           }
-          setShowKeypadInputArea(false);
+          
+          // Keypad remains, but content might clear for next turn if needed (handled by individual message type logic)
 
         } else { // Friend's message
-          setShowKeypadInputArea(false);
+          setCurrentTypingText("");
+          setShowSendButton(false);
+          setIsRecordingAudio(false);
+          
           setShowFriendTypingIndicator(true);
           playSound(SOUND_FRIEND_TYPING);
           await stoppableDelay(FRIEND_TYPING_INDICATOR_DURATION_MS, signal);
@@ -407,7 +409,10 @@ export default function ChatterSimPage() {
       }
     } finally {
       setIsSimulating(false);
-      setShowKeypadInputArea(false);
+      setCurrentTypingText("");
+      setShowSendButton(false);
+      setIsRecordingAudio(false);
+      setShowFriendTypingIndicator(false);
       simulationAbortControllerRef.current = null;
     }
   };
@@ -430,7 +435,6 @@ export default function ChatterSimPage() {
     setCurrentTypingText("");
     setShowFriendTypingIndicator(false);
     setIsRecordingAudio(false);
-    setShowKeypadInputArea(false);
     setShowSendButton(false);
     setIsSimulating(false);
   };
@@ -524,7 +528,7 @@ export default function ChatterSimPage() {
                   <Label htmlFor="chatWallpaperUrlInput">Chat Wallpaper</Label>
                   <div className="flex items-center gap-2">
                      {chatWallpaperUrl && (
-                       <NextImage src={chatWallpaperUrl} alt="Wallpaper Preview" width={40} height={40} className="rounded object-cover border" data-ai-hint="wallpaper background" />
+                       <NextImage src={chatWallpaperUrl} alt="Wallpaper Preview" width={40} height={40} className="rounded object-cover border" data-ai-hint="wallpaper background"/>
                      )}
                     <Input
                       id="chatWallpaperUrlInput"
@@ -583,18 +587,18 @@ export default function ChatterSimPage() {
                 friendAvatarUrl={friendAvatarUrl}
                 wallpaperUrl={chatWallpaperUrl}
               />
-              {(showKeypadInputArea || isRecordingAudio) && (
-                <KeypadArea
-                  isSimulating={isSimulating && (currentTypingText !== "" || isRecordingAudio)}
-                  isRecordingAudio={isRecordingAudio}
-                  typedText={currentTypingText}
-                  showSendButton={showSendButton}
-                />
-              )}
+              <KeypadArea
+                isSimulating={isSimulating && (currentTypingText !== "" || isRecordingAudio)}
+                isRecordingAudio={isRecordingAudio}
+                typedText={currentTypingText}
+                showSendButton={showSendButton}
+              />
             </div>
         </div>
       </main>
     </div>
   );
 }
+    
+
     
