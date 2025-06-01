@@ -9,7 +9,7 @@ import ChatWindow from "@/components/chat/ChatWindow";
 import KeypadArea from "@/components/chat/KeypadArea";
 import MessageComposer from "@/components/composer/MessageComposer";
 import AppHeader from "@/components/layout/AppHeader";
-import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Image as ImageIcon, Moon, Sun } from "lucide-react";
+import { UserCircle, FileUp as FileUpIcon, XCircle as XCircleIcon, Image as ImageIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -46,8 +46,8 @@ const SOUND_MY_AUDIO_RECORD_START = "/sounds/my_audio_record_start.mp3";
 const SOUND_MY_AUDIO_SENT = "/sounds/my_audio_sent.mp3";
 const SOUND_MY_TYPING = "/sounds/my_typing.mp3";
 
-const MAX_CHAT_WIDTH_PX = 384; // Corresponds to max-w-sm Tailwind class
-const MAX_CHAT_HEIGHT_PX = 750; // Corresponds to max-h-[750px] Tailwind class
+const MAX_CHAT_WIDTH_PX = 384; 
+const MAX_CHAT_HEIGHT_PX = 750; 
 
 
 export default function ChatterSimPage() {
@@ -140,11 +140,9 @@ export default function ChatterSimPage() {
     let finalHeight: number;
   
     if (targetAspectRatioValue >= containerAspectRatioValue) {
-      // Target is wider or same aspect as container, so width is the limiting dimension
       finalWidth = containerWidth;
       finalHeight = finalWidth / targetAspectRatioValue;
     } else {
-      // Target is taller than container, so height is the limiting dimension
       finalHeight = containerHeight;
       finalWidth = finalHeight * targetAspectRatioValue;
     }
@@ -155,6 +153,22 @@ export default function ChatterSimPage() {
     });
   
   }, [chatAspectRatio, customRatioWidth, customRatioHeight, isFullScreenChat]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && isFullScreenChat) {
+        setIsFullScreenChat(false);
+      }
+    };
+
+    if (isFullScreenChat) {
+      document.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isFullScreenChat]);
 
   const handleThemeToggle = () => {
     setCurrentTheme(prev => (prev === 'light' ? 'dark' : 'light'));
@@ -532,10 +546,9 @@ export default function ChatterSimPage() {
 
 
   const appHeaderHeight = "60px";
-  const appMainPaddingY = "32px"; // Corresponds to p-4 on main element for non-fullscreen
+  const appMainPaddingY = "32px"; 
 
   const chatAreaHeightNonFullScreen = `h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))]`;
-  const chatAreaHeightFullScreen = `h-[calc(100vh-var(--app-header-height))]`;
 
 
   const dynamicStyles = {
@@ -546,7 +559,7 @@ export default function ChatterSimPage() {
   const chatScreenClasses = cn(
     "flex flex-col overflow-hidden bg-background transition-all duration-300 ease-in-out",
     isFullScreenChat
-      ? `w-full ${chatAreaHeightFullScreen}`
+      ? `w-full h-full` 
       : appliedChatDimensions
         ? `shadow-2xl rounded-xl border-4 border-slate-700 dark:border-slate-600`
         : `w-full max-w-sm ${chatAreaHeightNonFullScreen} max-h-[750px] shadow-2xl rounded-xl border-4 border-slate-700 dark:border-slate-600`
@@ -555,19 +568,21 @@ export default function ChatterSimPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-200 dark:bg-slate-900" style={dynamicStyles}>
-      <AppHeader
-        isFullScreenChat={isFullScreenChat}
-        onToggleFullScreen={toggleFullScreenChat}
-        onStartSimulation={handleStartSimulation}
-        onStopSimulation={handleStopSimulation}
-        onResetSimulation={handleResetSimulation}
-        isSimulating={isSimulating}
-        canSimulate={customMessageQueue.length > 0}
-        currentTheme={currentTheme || 'light'}
-        onToggleTheme={handleThemeToggle}
-      />
+      {!isFullScreenChat && (
+        <AppHeader
+          isFullScreenChat={isFullScreenChat}
+          onToggleFullScreen={toggleFullScreenChat}
+          onStartSimulation={handleStartSimulation}
+          onStopSimulation={handleStopSimulation}
+          onResetSimulation={handleResetSimulation}
+          isSimulating={isSimulating}
+          canSimulate={customMessageQueue.length > 0}
+          currentTheme={currentTheme || 'light'}
+          onToggleTheme={handleThemeToggle}
+        />
+      )}
 
-      <main className={`flex-grow flex ${isFullScreenChat ? 'p-0 justify-center items-stretch' : 'p-4 gap-4 flex-col md:flex-row'}`}>
+      <main className={`flex-grow flex ${isFullScreenChat ? 'p-0 justify-center items-stretch h-screen' : 'p-4 gap-4 flex-col md:flex-row'}`}>
         {!isFullScreenChat && (
           <div className={`md:w-1/3 lg:w-1/4 h-full md:max-h-[calc(100vh-var(--app-header-height)-var(--app-main-padding-y))] flex flex-col gap-4`}>
             <Card>
@@ -630,9 +645,7 @@ export default function ChatterSimPage() {
                 <div className="space-y-2 border-t pt-4">
                   <Label htmlFor="chatWallpaperUrlInput">Chat Wallpaper</Label>
                   <div className="flex items-center gap-2">
-                     {chatWallpaperUrl && (
-                       <NextImage src={chatWallpaperUrl} alt="Wallpaper Preview" width={40} height={40} className="rounded object-cover border" data-ai-hint="wallpaper background"/>
-                     )}
+                     {/* Removed preview from here as it's applied to ChatWindow */}
                     <Input
                       id="chatWallpaperUrlInput"
                       value={isChatWallpaperUploaded ? "Using uploaded file" : chatWallpaperUrlInput}
