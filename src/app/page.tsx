@@ -21,7 +21,9 @@ import { Slider } from "@/components/ui/slider";
 const TYPING_SPEED_MS = 80;
 const FRIEND_TYPING_INDICATOR_DURATION_MS = 1500;
 const READING_WORDS_PER_MINUTE = 200;
-const BG_MUSIC_PAUSE_DELAY_MS = 200; // Delay for BG music to pause before friend's/my media
+const FADE_DURATION_MS = 300;
+const FADE_INTERVAL_MS = 20;
+
 
 const stoppableDelay = (ms: number, signal: AbortSignal) => {
   return new Promise<void>((resolve, reject) => {
@@ -33,6 +35,60 @@ const stoppableDelay = (ms: number, signal: AbortSignal) => {
       clearTimeout(timeoutId);
       reject(new DOMException("Aborted", "AbortError"));
     });
+  });
+};
+
+const fadeVolume = (
+  audioElement: HTMLAudioElement,
+  targetVolume: number,
+  duration: number,
+  signal: AbortSignal
+): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      // audioElement.volume = targetVolume; // Snap to target if aborted during fade
+      return reject(new DOMException("Aborted", "AbortError"));
+    }
+    if (!audioElement || audioElement.readyState < 1) { // Check if audio is loaded enough
+        // audioElement.volume = targetVolume; // Snap if not ready
+        return resolve(); // Or reject if this is an issue
+    }
+
+    const initialVolume = audioElement.volume;
+    const volumeChange = targetVolume - initialVolume;
+
+    if (Math.abs(volumeChange) < 0.01 && audioElement.volume.toFixed(2) === targetVolume.toFixed(2)) { // Already at target
+        return resolve();
+    }
+
+    const numSteps = Math.max(1, Math.floor(duration / FADE_INTERVAL_MS));
+    const stepSize = volumeChange / numSteps;
+    let currentStep = 0;
+
+    const intervalId = setInterval(() => {
+      if (signal.aborted) {
+        clearInterval(intervalId);
+        // audioElement.volume = targetVolume; // Snap to target on abort
+        return reject(new DOMException("Aborted", "AbortError"));
+      }
+
+      currentStep++;
+      const newVolume = initialVolume + stepSize * currentStep;
+      audioElement.volume = Math.max(0, Math.min(1, newVolume)); // Clamp between 0 and 1
+
+      if (currentStep >= numSteps) {
+        clearInterval(intervalId);
+        audioElement.volume = targetVolume; // Ensure exact target volume
+        resolve();
+      }
+    }, FADE_INTERVAL_MS);
+
+    const abortHandler = () => {
+      clearInterval(intervalId);
+      // audioElement.volume = targetVolume; // Snap to target on abort
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener('abort', abortHandler, { once: true });
   });
 };
 
@@ -67,10 +123,9 @@ export default function ChatterSimPage() {
 
   const [isFullScreenChat, setIsFullScreenChat] = useState(false);
 
-  // Background Music State
   const [bgMusicSrc, setBgMusicSrc] = useState<string>('');
   const [bgMusicUrlInput, setBgMusicUrlInput] = useState<string>('');
-  const [bgMusicVolume, setBgMusicVolume] = useState<number>(0.2); // Default to 20% volume
+  const [bgMusicVolume, setBgMusicVolume] = useState<number>(0.2);
   const [isBgMusicPlaying, setIsBgMusicPlaying] = useState<boolean>(false);
   const [bgMusicIsUploaded, setBgMusicIsUploaded] = useState<boolean>(false);
   const bgAudioRef = useRef<HTMLAudioElement>(null);
@@ -137,8 +192,6 @@ export default function ChatterSimPage() {
 
   const isAvatarUploaded = friendAvatarUrl.startsWith("data:image");
 
-
-  // Background Music Handlers
   const handleBgMusicUrlInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const newUrl = e.target.value;
     setBgMusicUrlInput(newUrl);
@@ -193,27 +246,20 @@ export default function ChatterSimPage() {
     setBgMusicVolume(value[0] / 100);
   };
 
-  // useEffects for Background Music
   useEffect(() => {
     const audio = bgAudioRef.current;
     if (audio) {
       if (isBgMusicPlaying && bgMusicSrc) {
-        if (audio.src !== bgMusicSrc) { // Ensure src is up to date
+        if (audio.src !== bgMusicSrc) {
           audio.src = bgMusicSrc;
         }
+        audio.volume = bgMusicVolume; // Set to user's desired volume
         audio.play().catch(error => console.warn("BG Music play error:", error));
       } else {
         audio.pause();
       }
     }
-  }, [isBgMusicPlaying, bgMusicSrc]);
-
-  useEffect(() => {
-    const audio = bgAudioRef.current;
-    if (audio) {
-      audio.volume = bgMusicVolume;
-    }
-  }, [bgMusicVolume]);
+  }, [isBgMusicPlaying, bgMusicSrc, bgMusicVolume]);
 
 
   const simulateChat = async (queue: MessageQueueItem[]) => {
@@ -232,11 +278,25 @@ export default function ChatterSimPage() {
     setShowFriendTypingIndicator(false);
     setMessages([]);
 
+    if (bgMusicSrc) setIsBgMusicPlaying(true);
+
+
     try {
       await stoppableDelay(500, signal);
 
-      for (const item of queue) {
+      for (let i = 0; i < queue.length; i++) {
         if (signal.aborted) return;
+        const item = queue[i];
+        const nextItem = queue[i+1];
+
+        const isCurrentItemMediaWithContent = (item.type === "audio" || item.type === "video") && item.content;
+
+        if (isCurrentItemMediaWithContent && bgAudioRef.current && isBgMusicPlaying) {
+            try {
+                await fadeVolume(bgAudioRef.current, 0, FADE_DURATION_MS, signal);
+            } catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return; throw e; }
+        }
+
 
         if (item.sender === "me") {
           setShowKeypadInputArea(true);
@@ -244,15 +304,13 @@ export default function ChatterSimPage() {
           if (signal.aborted) return;
 
           let sentMessageId: string | undefined;
-          let bgMusicPausedForMyAudio = false;
-
 
           if (item.type === "text") {
             setShowSendButton(false);
             playSound(SOUND_MY_TYPING);
-            for (let i = 0; i < item.content.length; i++) {
+            for (let charIndex = 0; charIndex < item.content.length; charIndex++) {
               if (signal.aborted) return;
-              setCurrentTypingText(item.content.substring(0, i + 1));
+              setCurrentTypingText(item.content.substring(0, charIndex + 1));
               await stoppableDelay(TYPING_SPEED_MS, signal);
             }
             setShowSendButton(true);
@@ -275,51 +333,33 @@ export default function ChatterSimPage() {
             setCurrentTypingText("");
             setShowSendButton(false);
 
-            if (item.content) {
-              // Pause BG Music if playing and my audio content exists
-              if (isBgMusicPlaying) {
-                bgMusicPausedForMyAudio = true;
-                setIsBgMusicPlaying(false);
-                try {
-                  await stoppableDelay(BG_MUSIC_PAUSE_DELAY_MS, signal);
-                } catch (e) {
-                  if (!(e instanceof DOMException && e.name === 'AbortError')) throw e;
-                }
-                if (signal.aborted) return;
-              }
-
+            if (item.content) { // If there's actual audio content for "my" message to play
               const audio = new Audio(item.content);
-              const playbackPromise = new Promise<void>((resolve, reject) => {
-                if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
+              const playbackPromise = new Promise<void>((resolvePlayback, rejectPlayback) => {
+                if (signal.aborted) return rejectPlayback(new DOMException("Aborted", "AbortError"));
                 const onAbort = () => {
                     audio.pause();
-                    reject(new DOMException("Aborted", "AbortError"));
+                    rejectPlayback(new DOMException("Aborted", "AbortError"));
                 };
                 signal.addEventListener('abort', onAbort, { once: true });
 
                 audio.oncanplaythrough = () => audio.play().catch(err => {
-                  console.error("Error playing recording sim audio:", err);
+                  console.error("Error playing my recording sim audio:", err);
                   signal.removeEventListener('abort', onAbort);
-                  resolve();
+                  resolvePlayback();
                 });
                 audio.onended = () => {
                     signal.removeEventListener('abort', onAbort);
-                    resolve();
+                    resolvePlayback();
                 };
                 audio.onerror = (e) => {
-                  console.error("Error during recording sim audio playback:", e);
+                  console.error("Error during my recording sim audio playback:", e);
                   signal.removeEventListener('abort', onAbort);
-                  resolve();
+                  resolvePlayback();
                 };
                 audio.load();
               });
               await playbackPromise;
-
-              // Resume BG Music if it was paused for this audio and not aborted
-              if (bgMusicPausedForMyAudio && !signal.aborted) {
-                setIsBgMusicPlaying(true);
-              }
-
             } else {
               await stoppableDelay(item.audioDuration || 2000, signal);
             }
@@ -336,8 +376,6 @@ export default function ChatterSimPage() {
             playSound(SOUND_MY_AUDIO_SENT);
 
           } else if (item.type === "image" || item.type === "gif" || item.type === "sticker" || item.type === "video") {
-            // Note: "my" video messages do not currently pause background music like friend's video.
-            // This could be added similarly to "my" audio if needed.
             setCurrentTypingText(`Sending ${item.type}...`);
             setShowSendButton(true);
             await stoppableDelay(700, signal);
@@ -370,17 +408,6 @@ export default function ChatterSimPage() {
           if (signal.aborted) return;
           setShowFriendTypingIndicator(false);
 
-          let bgMusicPausedByThisMessage = false;
-          if ((item.type === "audio" || item.type === "video") && item.content && isBgMusicPlaying) {
-              bgMusicPausedByThisMessage = true;
-              setIsBgMusicPlaying(false);
-              try {
-                  await stoppableDelay(BG_MUSIC_PAUSE_DELAY_MS, signal);
-              } catch (e) {
-                  if (!(e instanceof DOMException && e.name === 'AbortError')) throw e;
-              }
-              if (signal.aborted) return;
-          }
 
           if (item.type === "text") {
             addMessage({ sender: "friend", type: "text", content: item.content });
@@ -405,17 +432,17 @@ export default function ChatterSimPage() {
               });
               playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
               try {
-                await new Promise<void>((resolve, reject) => {
-                   if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
+                await new Promise<void>((resolvePlayback, rejectPlayback) => {
+                   if (signal.aborted) return rejectPlayback(new DOMException("Aborted", "AbortError"));
                    const onAbort = () => {
                       const audioToStop = document.getElementById(`audio-${audioMessageId}`) as HTMLAudioElement;
                       if(audioToStop) audioToStop.pause();
-                      reject(new DOMException("Aborted", "AbortError"));
+                      rejectPlayback(new DOMException("Aborted", "AbortError"));
                    };
                    signal.addEventListener('abort', onAbort, { once: true });
                    audioCompletionPromises.current[audioMessageId] = () => {
                       signal.removeEventListener('abort', onAbort);
-                      resolve();
+                      resolvePlayback();
                    };
                 });
               } catch (e) { if (!(e instanceof DOMException && e.name === 'AbortError')) throw e; }
@@ -436,17 +463,17 @@ export default function ChatterSimPage() {
               });
               playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
               try {
-                await new Promise<void>((resolve, reject) => {
-                   if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
+                await new Promise<void>((resolvePlayback, rejectPlayback) => {
+                   if (signal.aborted) return rejectPlayback(new DOMException("Aborted", "AbortError"));
                    const onAbort = () => {
                       const videoToStop = document.getElementById(`video-${videoMessageId}`) as HTMLVideoElement;
                       if(videoToStop) videoToStop.pause();
-                      reject(new DOMException("Aborted", "AbortError"));
+                      rejectPlayback(new DOMException("Aborted", "AbortError"));
                    };
                    signal.addEventListener('abort', onAbort, { once: true });
                    videoCompletionPromises.current[videoMessageId] = () => {
                       signal.removeEventListener('abort', onAbort);
-                      resolve();
+                      resolvePlayback();
                    };
                 });
               } catch (e) { if (!(e instanceof DOMException && e.name === 'AbortError')) throw e; }
@@ -456,11 +483,18 @@ export default function ChatterSimPage() {
              playSound(SOUND_FRIEND_MESSAGE_RECEIVED);
              await stoppableDelay(1500, signal);
           }
-
-          if (bgMusicPausedByThisMessage && !signal.aborted) {
-            setIsBgMusicPlaying(true);
-          }
         }
+
+        // After current item's media (if any) has finished processing
+        if (isCurrentItemMediaWithContent && bgAudioRef.current && isBgMusicPlaying && !signal.aborted) {
+            const nextItemIsAlsoMediaWithContent = nextItem && (nextItem.type === "audio" || nextItem.type === "video") && nextItem.content;
+            if (!nextItemIsAlsoMediaWithContent) { // If next is not media with content, or no next item
+                try {
+                    await fadeVolume(bgAudioRef.current, bgMusicVolume, FADE_DURATION_MS, signal);
+                } catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return; throw e; }
+            }
+        }
+
         if (signal.aborted) return;
         await stoppableDelay(item.delayAfter, signal);
       }
@@ -473,23 +507,20 @@ export default function ChatterSimPage() {
     } finally {
       setIsSimulating(false);
       setShowKeypadInputArea(false);
-      setIsBgMusicPlaying(false);
+      if (bgMusicSrc) setIsBgMusicPlaying(false); // Stop BG music when sim ends
       simulationAbortControllerRef.current = null;
     }
   };
 
   const handleStartSimulation = () => {
     simulateChat(customMessageQueue);
-    if (bgMusicSrc) {
-        setIsBgMusicPlaying(true);
-    }
   };
 
   const handleStopSimulation = () => {
     if (simulationAbortControllerRef.current) {
       simulationAbortControllerRef.current.abort();
     }
-    setIsBgMusicPlaying(false);
+    // isBgMusicPlaying will be set to false in simulateChat's finally block
   };
 
   const handleResetSimulation = () => {
@@ -503,7 +534,10 @@ export default function ChatterSimPage() {
     setShowKeypadInputArea(false);
     setShowSendButton(false);
     setIsSimulating(false);
-    setIsBgMusicPlaying(false);
+    // isBgMusicPlaying will be set to false in simulateChat's finally block if it was running
+    // Or, if not running, ensure it's off:
+    if (bgMusicSrc && !isSimulating) setIsBgMusicPlaying(false);
+
   };
 
 
@@ -661,16 +695,15 @@ export default function ChatterSimPage() {
                     </Button>
                   </>
                 )}
-                {bgMusicSrc && (
-                  <audio
-                      ref={bgAudioRef}
-                      src={bgMusicSrc}
-                      loop
-                      // Removed onCanPlay handler to prevent interference with useEffect-driven playback
-                  />
-                )}
               </CardContent>
             </Card>
+            {bgMusicSrc && (
+              <audio
+                  ref={bgAudioRef}
+                  src={bgMusicSrc}
+                  loop
+              />
+            )}
 
             <MessageComposer queue={customMessageQueue} setQueue={setCustomMessageQueue} />
           </div>
@@ -705,3 +738,4 @@ export default function ChatterSimPage() {
   );
 }
 
+    
