@@ -109,6 +109,7 @@ export default function ChatterSimPage() {
 
   const handleVideoPlaybackEnd = useCallback((messageId: string) => {
     setMessages(prev => prev.map(msg => msg.id === messageId ? { ...msg, isVideoPlaying: false } : msg));
+    const videoMessageId = messageId; // Ensure correct variable name if different elsewhere
     videoCompletionPromises.current[videoMessageId]?.();
     delete videoCompletionPromises.current[videoMessageId];
   }, []);
@@ -447,16 +448,6 @@ export default function ChatterSimPage() {
   } as React.CSSProperties;
 
 
-  const chatScreenStyle: React.CSSProperties = chatWallpaperUrl
-  ? {
-      backgroundImage: `url(${chatWallpaperUrl})`,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-    }
-  : {};
-
-
   return (
     <div className="flex flex-col min-h-screen bg-slate-200 dark:bg-slate-900" style={dynamicStyles}>
       <AppHeader
@@ -577,8 +568,7 @@ export default function ChatterSimPage() {
 
         <div className={`flex flex-col items-center justify-start ${isFullScreenChat ? 'w-full max-w-xl' : 'flex-grow md:w-2/3 lg:w-3/4'}`}>
             <div
-              className={`flex flex-col shadow-2xl overflow-hidden rounded-xl border-4 border-slate-700 dark:border-slate-600 ${isFullScreenChat ? `w-full ${fullScreenChatWindowHeight}` : `w-full max-w-sm ${chatWindowHeight} max-h-[750px]`} ${chatWallpaperUrl ? '' : 'bg-background'}`}
-              style={chatScreenStyle}
+              className={`flex flex-col shadow-2xl overflow-hidden rounded-xl border-4 border-slate-700 dark:border-slate-600 ${isFullScreenChat ? `w-full ${fullScreenChatWindowHeight}` : `w-full max-w-sm ${chatWindowHeight} max-h-[750px]`} bg-background`}
             >
               <ChatHeader
                 name={friendName}
@@ -591,7 +581,7 @@ export default function ChatterSimPage() {
                 onAudioPlaybackEnd={handleAudioPlaybackEnd}
                 onVideoPlaybackEnd={handleVideoPlaybackEnd}
                 friendAvatarUrl={friendAvatarUrl}
-                hasCustomWallpaper={!!chatWallpaperUrl}
+                wallpaperUrl={chatWallpaperUrl}
               />
               {(showKeypadInputArea || isRecordingAudio) && (
                 <KeypadArea
@@ -599,7 +589,6 @@ export default function ChatterSimPage() {
                   isRecordingAudio={isRecordingAudio}
                   typedText={currentTypingText}
                   showSendButton={showSendButton}
-                  hasCustomWallpaper={!!chatWallpaperUrl}
                 />
               )}
             </div>

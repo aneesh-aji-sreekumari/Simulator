@@ -13,10 +13,10 @@ interface ChatWindowProps {
   onAudioPlaybackEnd?: (messageId: string) => void;
   onVideoPlaybackEnd?: (messageId: string) => void;
   friendAvatarUrl: string;
-  hasCustomWallpaper?: boolean;
+  wallpaperUrl?: string;
 }
 
-export default function ChatWindow({ messages, showTypingIndicator, onAudioPlaybackEnd, onVideoPlaybackEnd, friendAvatarUrl, hasCustomWallpaper }: ChatWindowProps) {
+export default function ChatWindow({ messages, showTypingIndicator, onAudioPlaybackEnd, onVideoPlaybackEnd, friendAvatarUrl, wallpaperUrl }: ChatWindowProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,8 +28,21 @@ export default function ChatWindow({ messages, showTypingIndicator, onAudioPlayb
     }
   }, [messages, showTypingIndicator]);
 
+  const chatWindowStyle: React.CSSProperties = wallpaperUrl
+  ? {
+      backgroundImage: `url(${wallpaperUrl})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    }
+  : {};
+
   return (
-    <ScrollArea className={`flex-grow p-4 ${hasCustomWallpaper ? '' : 'bg-background'}`} ref={scrollAreaRef}>
+    <ScrollArea 
+      className={`flex-grow p-4 ${!wallpaperUrl ? 'bg-background' : ''}`} 
+      style={chatWindowStyle}
+      ref={scrollAreaRef}
+    >
       <div className="flex flex-col space-y-2" aria-live="polite">
         {messages.map((msg) => (
           <MessageBubble
@@ -45,3 +58,4 @@ export default function ChatWindow({ messages, showTypingIndicator, onAudioPlayb
     </ScrollArea>
   );
 }
+

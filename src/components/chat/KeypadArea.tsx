@@ -9,7 +9,6 @@ interface KeypadAreaProps {
   typedText: string; 
   onSendMessage?: () => void; 
   showSendButton: boolean;
-  hasCustomWallpaper?: boolean;
 }
 
 export default function KeypadArea({ 
@@ -17,16 +16,15 @@ export default function KeypadArea({
   isRecordingAudio, 
   typedText, 
   onSendMessage,
-  showSendButton,
-  hasCustomWallpaper
+  showSendButton
 }: KeypadAreaProps) {
   return (
-    <footer className={`p-3 border-t flex items-center gap-2 ${hasCustomWallpaper ? 'bg-transparent' : 'bg-background'}`}>
+    <footer className="p-3 border-t flex items-center gap-2 bg-background">
       <Button variant="ghost" size="icon" aria-label="Emoji">
         <Smile className="text-muted-foreground" />
       </Button>
       
-      <div className={`flex-grow rounded-full px-4 py-2 flex items-center text-sm min-h-[40px] ${hasCustomWallpaper ? 'bg-white/80 dark:bg-black/50' : 'bg-input dark:bg-card'}`}>
+      <div className="flex-grow rounded-full px-4 py-2 flex items-center text-sm min-h-[40px] bg-input dark:bg-card">
         {isRecordingAudio ? (
           <div className="flex items-center text-red-500 w-full">
             <Mic size={20} className="mr-2 animate-pulse" />
@@ -56,3 +54,4 @@ export default function KeypadArea({
     </footer>
   );
 }
+
